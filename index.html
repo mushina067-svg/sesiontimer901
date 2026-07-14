@@ -3729,110 +3729,139 @@ document.getElementById("btn-tpl-apply").addEventListener("click",function(){
 // Macrociclo M2: 21 jul 2026 – 13 dic 2026 (21 semanas)
 // Días de gym: Martes (tracción+core), Miércoles (piernas+plio), Jueves (empuje+potencia)
 
-var GYM_M2_START = new Date(2026, 6, 21); // 21 julio 2026 (mes 0-indexed)
+var GYM_M2_START = new Date(2026, 6, 20); // 20 julio 2026 (lunes, mes 0-indexed)
 
 var GYM_PHASES = {
-  S1:  {fase:"TRANSICIÓN",     color:"var(--purple)",  textColor:"var(--pt)"},
-  S2:  {fase:"Acum. A",        color:"var(--green)",   textColor:"var(--gt)"},
-  S3:  {fase:"Acum. A",        color:"var(--green)",   textColor:"var(--gt)"},
-  S4:  {fase:"Acum. A",        color:"var(--green)",   textColor:"var(--gt)"},
-  S5:  {fase:"Acum. B",        color:"var(--green)",   textColor:"var(--gt)"},
-  S6:  {fase:"Acum. B",        color:"var(--green)",   textColor:"var(--gt)"},
-  S7:  {fase:"Acum. B",        color:"var(--green)",   textColor:"var(--gt)"},
-  S8:  {fase:"DESCARGA",       color:"var(--amber)",   textColor:"var(--at)"},
-  S9:  {fase:"Intensif.",      color:"var(--red)",     textColor:"var(--rt)"},
-  S10: {fase:"Intensif.",      color:"var(--red)",     textColor:"var(--rt)"},
-  S11: {fase:"Intensif.",      color:"var(--red)",     textColor:"var(--rt)"},
-  S12: {fase:"DESCARGA",       color:"var(--amber)",   textColor:"var(--at)"},
-  S13: {fase:"Pico",           color:"var(--red)",     textColor:"var(--rt)"},
-  S14: {fase:"Pico",           color:"var(--red)",     textColor:"var(--rt)"},
-  S15: {fase:"TEST ★",         color:"var(--blue)",    textColor:"var(--bt)"},
-  S16: {fase:"DESC. PROFUNDA", color:"var(--amber)",   textColor:"var(--at)"},
-  S17: {fase:"Mantenim.",      color:"var(--blue)",    textColor:"var(--bt)"},
-  S18: {fase:"Mantenim.",      color:"var(--blue)",    textColor:"var(--bt)"},
-  S19: {fase:"Mantenim.",      color:"var(--blue)",    textColor:"var(--bt)"},
-  S20: {fase:"PRE-COMP",       color:"var(--faint)",   textColor:"var(--faint)"},
-  S21: {fase:"PRE-COMP",       color:"var(--faint)",   textColor:"var(--faint)"}
+  S1:  {fase:"Acumulación",       color:"var(--green)",  textColor:"var(--gt)"},
+  S2:  {fase:"Acumulación",       color:"var(--green)",  textColor:"var(--gt)"},
+  S3:  {fase:"Acum. · DESCARGA",  color:"var(--amber)",  textColor:"var(--at)"},
+  S4:  {fase:"Acumulación",       color:"var(--green)",  textColor:"var(--gt)"},
+  S5:  {fase:"Acumulación",       color:"var(--green)",  textColor:"var(--gt)"},
+  S6:  {fase:"Acum. · DESCARGA",  color:"var(--amber)",  textColor:"var(--at)"},
+  S7:  {fase:"Intensificación",   color:"var(--red)",    textColor:"var(--rt)"},
+  S8:  {fase:"Intensificación",   color:"var(--red)",    textColor:"var(--rt)"},
+  S9:  {fase:"Intens. · DESCARGA",color:"var(--amber)",  textColor:"var(--at)"},
+  S10: {fase:"TEST RM ★",         color:"var(--blue)",   textColor:"var(--bt)"},
+  S11: {fase:"Intensificación",   color:"var(--red)",    textColor:"var(--rt)"},
+  S12: {fase:"Intens. · DESCARGA",color:"var(--amber)",  textColor:"var(--at)"},
+  S13: {fase:"Pico",              color:"var(--red)",    textColor:"var(--rt)"},
+  S14: {fase:"Pico",              color:"var(--red)",    textColor:"var(--rt)"},
+  S15: {fase:"Pico · DESCARGA",   color:"var(--amber)",  textColor:"var(--at)"},
+  S16: {fase:"Pico",              color:"var(--red)",    textColor:"var(--rt)"},
+  S17: {fase:"Pico",              color:"var(--red)",    textColor:"var(--rt)"},
+  S18: {fase:"Pico · DESCARGA",   color:"var(--amber)",  textColor:"var(--at)"},
+  S19: {fase:"Taper",             color:"var(--blue)",   textColor:"var(--bt)"},
+  S20: {fase:"Taper",             color:"var(--blue)",   textColor:"var(--bt)"},
+  S21: {fase:"COMPETENCIA",       color:"var(--purple)", textColor:"var(--pt)"}
 };
 
-// MARTES — Dominadas lastradas + Remo Sentado
-var GYM_MARTES = {
-  S1:  {tag:"TRANS",  dom:{sx:"3×3",kg:12,desc:3}, remo:{sx:"2×8",int:"RPE 5",desc:2}},
-  S2:  {tag:"",       dom:{sx:"4×3",kg:14,desc:3}, remo:{sx:"3×8",int:"RPE 6",desc:2}},
-  S3:  {tag:"",       dom:{sx:"4×3",kg:16,desc:3}, remo:{sx:"3×8",int:"RPE 7",desc:2}},
-  S4:  {tag:"",       dom:{sx:"5×3",kg:16,desc:3}, remo:{sx:"4×8",int:"RPE 7",desc:2}},
-  S5:  {tag:"",       dom:{sx:"4×3",kg:18,desc:4}, remo:{sx:"4×6",int:"RPE 8",desc:2}},
-  S6:  {tag:"",       dom:{sx:"4×3",kg:19,desc:4}, remo:{sx:"4×6",int:"RPE 8",desc:2}},
-  S7:  {tag:"",       dom:{sx:"5×3",kg:20,desc:4}, remo:{sx:"4×6",int:"RPE 8",desc:2}},
-  S8:  {tag:"DESC",   dom:{sx:"3×2",kg:12,desc:3}, remo:{sx:"2×8",int:"RPE 5",desc:2}},
-  S9:  {tag:"",       dom:{sx:"4×2",kg:21,desc:4}, remo:{sx:"4×6",int:"RPE 8",desc:2}},
-  S10: {tag:"",       dom:{sx:"4×2",kg:22,desc:5}, remo:{sx:"4×5",int:"RPE 9",desc:2}},
-  S11: {tag:"",       dom:{sx:"3×2",kg:23,desc:5}, remo:{sx:"3×5",int:"RPE 9",desc:2}},
-  S12: {tag:"DESC",   dom:{sx:"3×2",kg:14,desc:3}, remo:{sx:"2×8",int:"RPE 5",desc:2}},
-  S13: {tag:"",       dom:{sx:"3×2",kg:24,desc:5}, remo:{sx:"3×5",int:"RPE 9",desc:2}},
-  S14: {tag:"",       dom:{sx:"3×2",kg:26,desc:5}, remo:{sx:"3×5",int:"RPE 9",desc:2}},
-  S15: {tag:"TEST",   dom:{sx:"TEST 2RM",kg:"28–30",desc:5}, remo:{sx:"3×5",int:"RPE 9",desc:2}},
-  S16: {tag:"DESC",   dom:{sx:"2×2",kg:12,desc:3}, remo:{sx:"2×8",int:"RPE 5",desc:2}},
-  S17: {tag:"",       dom:{sx:"2×2",kg:22,desc:4}, remo:{sx:"2×5",int:"RPE 7",desc:2}},
-  S18: {tag:"",       dom:{sx:"2×2",kg:22,desc:4}, remo:{sx:"2×5",int:"RPE 7",desc:2}},
-  S19: {tag:"",       dom:{sx:"2×2",kg:22,desc:4}, remo:{sx:"2×5",int:"RPE 7",desc:2}},
-  S20: null, S21: null
+// LUNES — Tracción + Core · Dominadas Lastradas + Jalón en Polea Baja
+var GYM_LUNES = {
+  S1:  {dom:{sx:"4×3",kg:18,desc:3},              jalon:{sx:"3×10",desc:2}},
+  S2:  {dom:{sx:"4×3",kg:20,desc:3},              jalon:{sx:"3×10",desc:2}},
+  S3:  {dom:{sx:"3×3",kg:18,desc:3},              jalon:{sx:"2×10",desc:2}},
+  S4:  {dom:{sx:"4×3",kg:20,desc:3},              jalon:{sx:"3×10",desc:2}},
+  S5:  {dom:{sx:"4×3",kg:22,desc:3},              jalon:{sx:"3×10",desc:2}},
+  S6:  {dom:{sx:"3×3",kg:20,desc:3},              jalon:{sx:"2×10",desc:2}},
+  S7:  {dom:{sx:"4×2",kg:22,desc:4},              jalon:{sx:"4×8",desc:2}},
+  S8:  {dom:{sx:"4×2",kg:24,desc:4},              jalon:{sx:"4×8",desc:2}},
+  S9:  {dom:{sx:"3×2",kg:22,desc:4},              jalon:{sx:"2×10",desc:2}},
+  S10: {dom:{sx:"TEST 2RM",kg:"+26–28",desc:5},   jalon:{sx:"3×8",desc:2}},
+  S11: {dom:{sx:"4×2",kg:26,desc:5},              jalon:{sx:"4×8",desc:2}},
+  S12: {dom:{sx:"3×2",kg:24,desc:4},              jalon:{sx:"2×10",desc:2}},
+  S13: {dom:{sx:"3×2",kg:26,desc:5},              jalon:{sx:"4×8",desc:2}},
+  S14: {dom:{sx:"3×2",kg:28,desc:5},              jalon:{sx:"4×8",desc:2}},
+  S15: {dom:{sx:"2×2",kg:26,desc:5},              jalon:{sx:"2×10",desc:2}},
+  S16: {dom:{sx:"3×2",kg:28,desc:5},              jalon:{sx:"4×8",desc:2}},
+  S17: {dom:{sx:"3×2",kg:30,desc:5},              jalon:{sx:"4×8",desc:2}},
+  S18: {dom:{sx:"2×2",kg:28,desc:5},              jalon:{sx:"2×10",desc:2}},
+  S19: {dom:{sx:"2×2",kg:24,desc:3},              jalon:{sx:"2×8",desc:2}},
+  S20: {dom:{sx:"2×2",kg:20,desc:3},              jalon:{sx:"2×8",desc:2}},
+  S21: {dom:{sx:"2×1",kg:16,desc:3},              jalon:{sx:"Activación",desc:2}}
 };
 
-// MIÉRCOLES — Sentadilla + Saltos
+// MIÉRCOLES — Empuje + Potencia · Press de Banca + Medio Snatch con Barra
 var GYM_MIERCOLES = {
-  S1:  {tag:"TRANS", sq:{sx:"3×4",kg:62,pct:"70%",desc:3}, saltos:{sv:"3×3",sh:"3×3",desc:2}},
-  S2:  {tag:"",      sq:{sx:"4×4",kg:66,pct:"75%",desc:3}, saltos:{sv:"4×4",sh:"4×4",desc:2}},
-  S3:  {tag:"",      sq:{sx:"4×4",kg:70,pct:"80%",desc:3}, saltos:{sv:"4×4",sh:"4×4",desc:2}},
-  S4:  {tag:"",      sq:{sx:"4×4",kg:72,pct:"82%",desc:3}, saltos:{sv:"4×4",sh:"4×4",desc:2}},
-  S5:  {tag:"",      sq:{sx:"4×3",kg:75,pct:"85%",desc:4}, saltos:{sv:"5×4",sh:"5×4",desc:2}},
-  S6:  {tag:"",      sq:{sx:"4×3",kg:77,pct:"87%",desc:4}, saltos:{sv:"5×4",sh:"5×4",desc:2}},
-  S7:  {tag:"",      sq:{sx:"4×3",kg:79,pct:"90%",desc:4}, saltos:{sv:"5×4",sh:"5×4",desc:2}},
-  S8:  {tag:"DESC",  sq:{sx:"3×3",kg:62,pct:"70%",desc:3}, saltos:{sv:"3×3",sh:"3×3",desc:2}},
-  S9:  {tag:"",      sq:{sx:"4×3",kg:81,pct:"92%",desc:4}, saltos:{sv:"5×4",sh:"5×4",desc:2}},
-  S10: {tag:"",      sq:{sx:"3×3",kg:83,pct:"94%",desc:5}, saltos:{sv:"5×4",sh:"5×4",desc:2}},
-  S11: {tag:"",      sq:{sx:"3×2",kg:86,pct:"98%",desc:5}, saltos:{sv:"5×4",sh:"5×4",desc:2}},
-  S12: {tag:"DESC",  sq:{sx:"3×3",kg:64,pct:"73%",desc:3}, saltos:{sv:"3×3",sh:"3×3",desc:2}},
-  S13: {tag:"",      sq:{sx:"3×2",kg:88,pct:"100%",desc:5}, saltos:{sv:"4×3",sh:"4×3",desc:2}},
-  S14: {tag:"",      sq:{sx:"3×2",kg:91,pct:"103%",desc:5}, saltos:{sv:"4×3",sh:"4×3",desc:2}},
-  S15: {tag:"TEST",  sq:{sx:"TEST 1RM",kg:"100–105",pct:"—",desc:5}, saltos:{sv:"4×3",sh:"4×3",desc:2}},
-  S16: {tag:"DESC",  sq:{sx:"2×3",kg:62,pct:"70%",desc:3}, saltos:{sv:"2×3",sh:"2×3",desc:2}},
-  S17: {tag:"",      sq:{sx:"3×3",kg:79,pct:"90%",desc:4}, saltos:{sv:"3×3",sh:"3×3",desc:2}},
-  S18: {tag:"",      sq:{sx:"3×3",kg:79,pct:"90%",desc:4}, saltos:{sv:"3×3",sh:"3×3",desc:2}},
-  S19: {tag:"",      sq:{sx:"3×3",kg:79,pct:"90%",desc:4}, saltos:{sv:"3×3",sh:"3×3",desc:2}},
-  S20: null, S21: null
+  S1:  {banca:{sx:"4×3",kg:70,desc:3},            snatch:{sx:"4×3",kg:50,desc:3}},
+  S2:  {banca:{sx:"4×3",kg:73,desc:3},            snatch:{sx:"4×3",kg:52,desc:3}},
+  S3:  {banca:{sx:"3×3",kg:70,desc:3},            snatch:{sx:"3×2",kg:50,desc:3}},
+  S4:  {banca:{sx:"4×3",kg:73,desc:3},            snatch:{sx:"4×3",kg:52,desc:3}},
+  S5:  {banca:{sx:"4×3",kg:76,desc:3},            snatch:{sx:"4×3",kg:54,desc:3}},
+  S6:  {banca:{sx:"3×3",kg:73,desc:3},            snatch:{sx:"3×2",kg:52,desc:3}},
+  S7:  {banca:{sx:"4×2",kg:76,desc:4},            snatch:{sx:"4×3",kg:54,desc:3}},
+  S8:  {banca:{sx:"4×2",kg:79,desc:4},            snatch:{sx:"4×3",kg:56,desc:3}},
+  S9:  {banca:{sx:"3×2",kg:76,desc:4},            snatch:{sx:"3×2",kg:54,desc:3}},
+  S10: {banca:{sx:"TEST 2RM",kg:"83–86",desc:5},  snatch:{sx:"4×3",kg:54,desc:3}},
+  S11: {banca:{sx:"4×2",kg:82,desc:5},            snatch:{sx:"4×2",kg:56,desc:3}},
+  S12: {banca:{sx:"3×2",kg:79,desc:4},            snatch:{sx:"3×2",kg:54,desc:3}},
+  S13: {banca:{sx:"3×2",kg:82,desc:5},            snatch:{sx:"4×2",kg:54,desc:3}},
+  S14: {banca:{sx:"3×2",kg:85,desc:5},            snatch:{sx:"4×2",kg:56,desc:3}},
+  S15: {banca:{sx:"2×2",kg:82,desc:5},            snatch:{sx:"3×2",kg:54,desc:3}},
+  S16: {banca:{sx:"3×2",kg:85,desc:5},            snatch:{sx:"4×2",kg:54,desc:3}},
+  S17: {banca:{sx:"3×2",kg:88,desc:5},            snatch:{sx:"4×2",kg:56,desc:3}},
+  S18: {banca:{sx:"2×2",kg:85,desc:5},            snatch:{sx:"3×2",kg:54,desc:3}},
+  S19: {banca:{sx:"2×2",kg:80,desc:3},            snatch:{sx:"3×2",kg:52,desc:3}},
+  S20: {banca:{sx:"2×2",kg:72,desc:3},            snatch:{sx:"2×2",kg:50,desc:3}},
+  S21: {banca:{sx:"2×1",kg:65,desc:3},            snatch:{sx:"2×2",kg:50,desc:3}}
 };
 
-// JUEVES — Press Banca + Medio Snatch + Roller
-var GYM_JUEVES = {
-  S1:  {tag:"TRANS", banca:{sx:"3×3",kg:57,desc:3}, snatch:{sx:"3×3",kg:50,desc:3}},
-  S2:  {tag:"",      banca:{sx:"4×3",kg:60,desc:3}, snatch:{sx:"4×3",kg:52,desc:3}},
-  S3:  {tag:"",      banca:{sx:"4×4",kg:62,desc:3}, snatch:{sx:"4×3",kg:54,desc:3}},
-  S4:  {tag:"",      banca:{sx:"5×3",kg:64,desc:3}, snatch:{sx:"5×3",kg:55,desc:3}},
-  S5:  {tag:"",      banca:{sx:"4×3",kg:67,desc:4}, snatch:{sx:"4×3",kg:56,desc:3}},
-  S6:  {tag:"",      banca:{sx:"4×3",kg:70,desc:4}, snatch:{sx:"4×3",kg:57,desc:3}},
-  S7:  {tag:"",      banca:{sx:"5×3",kg:72,desc:4}, snatch:{sx:"5×3",kg:58,desc:3}},
-  S8:  {tag:"DESC",  banca:{sx:"3×3",kg:55,desc:3}, snatch:{sx:"3×2",kg:46,desc:3}},
-  S9:  {tag:"",      banca:{sx:"4×2",kg:74,desc:4}, snatch:{sx:"4×3",kg:59,desc:3}},
-  S10: {tag:"",      banca:{sx:"4×2",kg:76,desc:5}, snatch:{sx:"4×3",kg:61,desc:3}},
-  S11: {tag:"",      banca:{sx:"3×2",kg:78,desc:5}, snatch:{sx:"4×3",kg:62,desc:3}},
-  S12: {tag:"DESC",  banca:{sx:"3×3",kg:57,desc:3}, snatch:{sx:"3×2",kg:48,desc:3}},
-  S13: {tag:"",      banca:{sx:"3×2",kg:79,desc:5}, snatch:{sx:"4×3",kg:63,desc:3}},
-  S14: {tag:"",      banca:{sx:"3×2",kg:81,desc:5}, snatch:{sx:"4×3",kg:64,desc:3}},
-  S15: {tag:"TEST",  banca:{sx:"TEST 2RM",kg:"87–90",desc:5}, snatch:{sx:"4×3",kg:65,desc:3}},
-  S16: {tag:"DESC",  banca:{sx:"2×2",kg:55,desc:3}, snatch:{sx:"2×2",kg:46,desc:3}},
-  S17: {tag:"",      banca:{sx:"2×2",kg:74,desc:4}, snatch:{sx:"3×3",kg:60,desc:3}},
-  S18: {tag:"",      banca:{sx:"2×2",kg:74,desc:4}, snatch:{sx:"3×3",kg:60,desc:3}},
-  S19: {tag:"",      banca:{sx:"2×2",kg:74,desc:4}, snatch:{sx:"3×3",kg:60,desc:3}},
-  S20: null, S21: null
+// VIERNES — Piernas + Pliometría · Sentadilla Libre + Medio Clean con Barra
+var GYM_VIERNES = {
+  S1:  {sq:{sx:"4×3",kg:70,desc:3},               clean:{sx:"4×3",desc:3}},
+  S2:  {sq:{sx:"4×3",kg:73,desc:3},               clean:{sx:"4×3",desc:3}},
+  S3:  {sq:{sx:"3×3",kg:70,desc:3},               clean:{sx:"3×2",desc:3}},
+  S4:  {sq:{sx:"4×3",kg:73,desc:3},               clean:{sx:"4×3",desc:3}},
+  S5:  {sq:{sx:"4×3",kg:76,desc:3},               clean:{sx:"4×3",desc:3}},
+  S6:  {sq:{sx:"3×3",kg:73,desc:3},               clean:{sx:"3×2",desc:3}},
+  S7:  {sq:{sx:"4×2",kg:76,desc:4},               clean:{sx:"4×3",desc:3}},
+  S8:  {sq:{sx:"4×2",kg:79,desc:4},               clean:{sx:"4×3",desc:3}},
+  S9:  {sq:{sx:"3×2",kg:76,desc:4},               clean:{sx:"3×2",desc:3}},
+  S10: {sq:{sx:"TEST 2RM",kg:"85–88",desc:5},     clean:{sx:"4×3",desc:3}},
+  S11: {sq:{sx:"4×2",kg:82,desc:5},               clean:{sx:"4×3",desc:3}},
+  S12: {sq:{sx:"3×2",kg:79,desc:4},               clean:{sx:"3×2",desc:3}},
+  S13: {sq:{sx:"3×2",kg:82,desc:5},               clean:{sx:"4×2",desc:3}},
+  S14: {sq:{sx:"3×2",kg:85,desc:5},               clean:{sx:"4×2",desc:3}},
+  S15: {sq:{sx:"2×2",kg:82,desc:5},               clean:{sx:"3×2",desc:3}},
+  S16: {sq:{sx:"3×2",kg:85,desc:5},               clean:{sx:"4×2",desc:3}},
+  S17: {sq:{sx:"3×2",kg:88,desc:5},               clean:{sx:"4×2",desc:3}},
+  S18: {sq:{sx:"2×2",kg:85,desc:5},               clean:{sx:"3×2",desc:3}},
+  S19: {sq:{sx:"2×2",kg:80,desc:3},               clean:{sx:"2×2",desc:3}},
+  S20: {sq:{sx:"2×2",kg:70,desc:3},               clean:{sx:"2×2",desc:3}},
+  S21: {sq:{sx:"2×1",kg:62,desc:3},               clean:{sx:"2×2",desc:3}}
 };
+
+// Complementarios por fase (se resuelven según la categoría de la semana)
+var GYM_PULLOVER = {acum:{sx:"3×12",desc:1.5}, intens:{sx:"3×10",desc:1.5}, pico:{sx:"3×10",desc:1.5}, desc:{sx:"2×12",desc:1.5}, taper:{sx:"2×12",desc:1.5}};
+var GYM_FONDOS   = {acum:{sx:"3×8",desc:2},    intens:{sx:"4×8",desc:2},    pico:{sx:"4×6",desc:2},    desc:{sx:"2×8",desc:2},    taper:{sx:"2×8",desc:2}};
+var GYM_ABS      = {acum:{sx:"3×12",desc:1},   intens:{sx:"3×12",desc:1},   pico:{sx:"3×12",desc:1},   desc:{sx:"2×12",desc:1},   taper:{sx:"2×12",desc:1}};
+var GYM_PESOM    = {acum:{sx:"3×8",desc:2},    intens:{sx:"3×8",desc:2},    pico:{sx:"3×6",desc:2},    desc:{sx:"2×8",desc:2},    taper:{sx:"2×8",desc:2}};
+var GYM_SALTOS   = {acum:{sx:"4×4",desc:2},    intens:{sx:"5×4",desc:2},    pico:{sx:"4×3",desc:2},    desc:{sx:"3×3",desc:2},    taper:{sx:"2×3",desc:2}};
 
 var gymCurrentWeek = 0; // offset from start week (0 = S1)
-var gymCurrentDay = ""; // "martes", "miercoles", "jueves"
+var gymCurrentDay = ""; // "lunes", "miercoles", "viernes"
 var gymRestTimer = null;
 var gymRestRemaining = 0;
 var gymRestTotal = 0;
 var gymRestExercise = "";
+
+function gymWeekNum(wk){ return parseInt(wk.slice(1),10); }
+function gymCat(wk){
+  var n = gymWeekNum(wk);
+  if(n>=19) return "taper";
+  if(n===3||n===6||n===9||n===12||n===15||n===18) return "desc";
+  if(n<=6) return "acum";
+  if(n<=12) return "intens";
+  return "pico";
+}
+function gymTag(wk){
+  var n = gymWeekNum(wk);
+  if(n===10) return "TEST";
+  if(n===21) return "COMP";
+  if(n>=19) return "TAPER";
+  if(n===3||n===6||n===9||n===12||n===15||n===18) return "DESC";
+  return "";
+}
+function gymPhase(wk, table){ return table[gymCat(wk)]; }
 
 function gymGetCurrentWeek(){
   var today = new Date();
@@ -3846,11 +3875,11 @@ function gymGetCurrentWeek(){
 function gymWeekKey(offset){ return "S"+(offset+1); }
 
 function gymGetDayOfWeek(){
-  var d = new Date().getDay(); // 0=sun,1=mon,2=tue,3=wed,4=thu
-  if(d===2) return "martes";
+  var d = new Date().getDay(); // 0=dom,1=lun,3=mié,5=vie
+  if(d===1) return "lunes";
   if(d===3) return "miercoles";
-  if(d===4) return "jueves";
-  return "martes"; // default
+  if(d===5) return "viernes";
+  return "lunes"; // default
 }
 
 function gymInit(){
@@ -3871,8 +3900,8 @@ function gymRender(){
 
   // Day tabs
   var dayTabsEl = document.getElementById("gym-day-tabs");
-  var days = ["martes","miercoles","jueves"];
-  var dayLabels = {"martes":"Mar · Tracción","miercoles":"Mié · Piernas","jueves":"Jue · Empuje"};
+  var days = ["lunes","miercoles","viernes"];
+  var dayLabels = {"lunes":"Lun · Tracción","miercoles":"Mié · Empuje","viernes":"Vie · Piernas"};
   dayTabsEl.innerHTML = "";
   days.forEach(function(d){
     var btn = document.createElement("button");
@@ -3884,30 +3913,40 @@ function gymRender(){
 
   // Content
   var content = document.getElementById("gym-session-content");
-  var data = gymCurrentDay==="martes"   ? GYM_MARTES[wk]
+  var data = gymCurrentDay==="lunes"     ? GYM_LUNES[wk]
             : gymCurrentDay==="miercoles" ? GYM_MIERCOLES[wk]
-            : GYM_JUEVES[wk];
+            : GYM_VIERNES[wk];
 
   if(!data){
-    content.innerHTML = '<div style="text-align:center;padding:3rem 1rem;"><div style="font-size:40px;margin-bottom:12px;">🏊</div><div style="color:var(--faint);font-size:14px;">SIN GYM esta semana</div><div style="color:var(--faint);font-size:12px;margin-top:6px;">Fase PRE-COMP · Solo activación suave si el coach lo decide</div></div>';
+    content.innerHTML = '<div style="text-align:center;padding:3rem 1rem;"><div style="font-size:40px;margin-bottom:12px;">🏊</div><div style="color:var(--faint);font-size:14px;">SIN GYM esta semana</div></div>';
     return;
   }
 
+  var tag = gymTag(wk);
   var html = "";
-  if(data.tag) html += '<div style="display:inline-block;margin-bottom:10px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:'+(data.tag==="DESC"||data.tag==="TRANS"?"var(--ad)":"var(--bd)")+';color:'+(data.tag==="DESC"||data.tag==="TRANS"?"var(--at)":"var(--bt)")+';">'+data.tag+'</div>';
+  if(tag) html += '<div style="display:inline-block;margin-bottom:10px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:'+(tag==="DESC"||tag==="TAPER"?"var(--ad)":"var(--bd)")+';color:'+(tag==="DESC"||tag==="TAPER"?"var(--at)":"var(--bt)")+';">'+tag+'</div>';
 
-  if(gymCurrentDay==="martes"){
+  var roller = (wk!=="S21") ? gymCardRoller() : "";
+
+  if(gymCurrentDay==="lunes"){
     html += gymCardDom(data.dom);
-    html += gymCardRemo(data.remo);
-    html += '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:10px 14px;margin-bottom:8px;font-size:11px;color:var(--faint);line-height:1.5;">Core complementario según disponibilidad</div>';
+    html += gymCardJalon(data.jalon);
+    html += gymCardPullover(gymPhase(wk, GYM_PULLOVER));
+    html += roller;
+    html += '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:10px 14px;margin-bottom:8px;font-size:11px;color:var(--faint);line-height:1.5;">Gym siempre 30–45 min ANTES de la piscina (efecto PAP).</div>';
   } else if(gymCurrentDay==="miercoles"){
-    html += gymCardSentadilla(data.sq);
-    html += gymCardSaltos(data.saltos);
-    html += '<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:10px 14px;margin-bottom:8px;font-size:11px;color:var(--bt);line-height:1.5;"><b>Orden inamovible:</b> 1) Sentadilla → 2) Saltos → 3) Sesión de potencia en agua (PAP)</div>';
-  } else {
     html += gymCardBanca(data.banca);
     html += gymCardSnatch(data.snatch);
-    html += gymCardRoller();
+    html += gymCardFondos(gymPhase(wk, GYM_FONDOS));
+    html += gymCardAbs(gymPhase(wk, GYM_ABS));
+    html += roller;
+  } else {
+    html += gymCardSentadilla(data.sq);
+    html += gymCardClean(data.clean);
+    html += gymCardPesoMuerto(gymPhase(wk, GYM_PESOM));
+    html += gymCardSaltos(gymPhase(wk, GYM_SALTOS));
+    html += roller;
+    html += '<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:10px 14px;margin-bottom:8px;font-size:11px;color:var(--bt);line-height:1.5;"><b>Orden inamovible (PAP):</b> 1) Sentadilla pesada → 2) Saltos horizontales → 3) Sesión de potencia en agua. No se invierte.</div>';
   }
   content.innerHTML = html;
 }
@@ -3938,7 +3977,7 @@ function gymExCard(title, color, rows, descMin, exerciseName){
   // Timer button
   var uid = "gymtimer_"+exerciseName.replace(/\s/g,"_");
   h += '<div style="padding:0 14px 12px;">';
-  h += '<button id="'+uid+'" onclick="gymStartRest('+descMin*60+',\''+exerciseName+'\')" style="width:100%;padding:10px;border-radius:var(--rs);border:none;background:var(--bd);color:var(--bt);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;">⏱ Iniciar descanso ('+descMin+' min)</button>';
+  h += '<button id="'+uid+'" onclick="gymStartRest('+Math.round(descMin*60)+',\''+exerciseName+'\')" style="width:100%;padding:10px;border-radius:var(--rs);border:none;background:var(--bd);color:var(--bt);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;">⏱ Iniciar descanso ('+descMin+' min)</button>';
   h += '</div>';
   h += '</div>';
   return h;
@@ -3951,56 +3990,39 @@ function gymCardDom(d){
     {bg:"var(--rd)",txt:"var(--rt)",bd:"var(--rb)"},
     [
       {label:"Series × Reps", value: d.sx},
-      {label:"Lastre", value: (isTest?d.kg:d.kg+" kg")},
+      {label:"Lastre", value: (isTest?d.kg+" kg":d.kg+" kg")},
       {label:"Descanso entre series", value: d.desc+" min"},
     ],
     d.desc,
     "Dominadas"
-  ) + (isTest?'<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--bt);">★ Semana de TEST — registrar 2RM máximo</div>':"");
+  ) + (isTest?'<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--bt);">★ Semana de TEST — registrar 2RM real. Las cargas S11–S21 se recalculan desde este resultado.</div>':"");
 }
 
-function gymCardRemo(r){
+function gymCardJalon(j){
+  var act = (j.sx==="Activación");
   return gymExCard(
-    "Remo Sentado Polea Baja",
+    "Jalón en Polea Baja",
     {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
     [
-      {label:"Series × Reps", value: r.sx},
-      {label:"Intensidad", value: r.int},
-      {label:"Descanso", value: r.desc+" min"},
+      {label:"Series × Reps", value: j.sx},
+      {label:"Descanso", value: j.desc+" min"},
     ],
-    r.desc,
-    "Remo"
-  );
+    j.desc,
+    "Jalon"
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Complementario espalda · rango completo + retracción escapular'+(act?' · Semana de competencia: solo activación.':'')+'</div>';
 }
 
-function gymCardSentadilla(s){
-  var isTest = typeof s.kg === "string";
+function gymCardPullover(p){
   return gymExCard(
-    "Sentadilla Libre",
-    {bg:"var(--rd)",txt:"var(--rt)",bd:"var(--rb)"},
+    "Pullover en Polea",
+    {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
     [
-      {label:"Series × Reps", value: s.sx},
-      {label:"Carga", value: (isTest?s.kg:s.kg+" kg")},
-      {label:"% 1RM", value: s.pct},
-      {label:"Descanso", value: s.desc+" min"},
+      {label:"Series × Reps", value: p.sx},
+      {label:"Descanso", value: "1:30 min"},
     ],
-    s.desc,
-    "Sentadilla"
-  ) + (isTest?'<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--bt);">★ Semana de TEST — registrar 1RM máximo</div>':"");
-}
-
-function gymCardSaltos(s){
-  return gymExCard(
-    "Saltos Verticales + Horizontales",
-    {bg:"var(--pd)",txt:"var(--pt)",bd:"var(--purple)"},
-    [
-      {label:"Saltos verticales", value: s.sv},
-      {label:"Saltos horizontales", value: s.sh},
-      {label:"Descanso", value: s.desc+" min"},
-    ],
-    s.desc,
-    "Saltos"
-  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Caída &gt;10% en altura o distancia entre series = detener esa batería</div>';
+    p.desc,
+    "Pullover"
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Complementario dorsal/serrato · control y estiramiento</div>';
 }
 
 function gymCardBanca(b){
@@ -4010,17 +4032,17 @@ function gymCardBanca(b){
     {bg:"var(--rd)",txt:"var(--rt)",bd:"var(--rb)"},
     [
       {label:"Series × Reps", value: b.sx},
-      {label:"Carga", value: (isTest?b.kg:b.kg+" kg")},
+      {label:"Carga", value: (isTest?b.kg+" kg":b.kg+" kg")},
       {label:"Descanso", value: b.desc+" min"},
     ],
     b.desc,
     "Banca"
-  ) + (isTest?'<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--bt);">★ Semana de TEST — registrar 2RM máximo</div>':"");
+  ) + (isTest?'<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--bt);">★ Semana de TEST — registrar 2RM real. Las cargas S11–S21 se recalculan desde este resultado.</div>':"");
 }
 
 function gymCardSnatch(s){
   return gymExCard(
-    "Medio Snatch",
+    "Medio Snatch con Barra",
     {bg:"var(--gd)",txt:"var(--gt)",bd:"var(--gb)"},
     [
       {label:"Series × Reps", value: s.sx},
@@ -4029,7 +4051,87 @@ function gymCardSnatch(s){
     ],
     s.desc,
     "Snatch"
-  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Velocidad &gt; carga · Rep lenta = terminar la serie inmediatamente · Sin test de 1RM en ninguna semana</div>';
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Velocidad &gt; carga · tope ~56 kg · rep lenta = terminar la serie · SIN test de RM</div>';
+}
+
+function gymCardFondos(f){
+  return gymExCard(
+    "Fondos en Paralela",
+    {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
+    [
+      {label:"Series × Reps", value: f.sx},
+      {label:"Descanso", value: f.desc+" min"},
+    ],
+    f.desc,
+    "Fondos"
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Empuje complementario · peso corporal (agregar lastre si resulta fácil, sin perder técnica)</div>';
+}
+
+function gymCardAbs(a){
+  return gymExCard(
+    "Abdominales \"libro\" con Balón",
+    {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
+    [
+      {label:"Series × Reps", value: a.sx},
+      {label:"Descanso", value: a.desc+" min"},
+    ],
+    a.desc,
+    "Abdominales"
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Core · ejecución controlada, sin tirón cervical</div>';
+}
+
+function gymCardSentadilla(s){
+  var isTest = typeof s.kg === "string";
+  return gymExCard(
+    "Sentadilla Libre",
+    {bg:"var(--rd)",txt:"var(--rt)",bd:"var(--rb)"},
+    [
+      {label:"Series × Reps", value: s.sx},
+      {label:"Carga", value: (isTest?s.kg+" kg":s.kg+" kg")},
+      {label:"Descanso", value: s.desc+" min"},
+    ],
+    s.desc,
+    "Sentadilla"
+  ) + (isTest?'<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--bt);">★ Semana de TEST — registrar 2RM real. Las cargas S11–S21 se recalculan desde este resultado.</div>':"");
+}
+
+function gymCardClean(c){
+  return gymExCard(
+    "Medio Clean con Barra",
+    {bg:"var(--gd)",txt:"var(--gt)",bd:"var(--gb)"},
+    [
+      {label:"Series × Reps", value: c.sx},
+      {label:"Descanso", value: c.desc+" min"},
+    ],
+    c.desc,
+    "Clean"
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Potencia · velocidad &gt; carga · una rep lenta = terminar la serie · SIN test ni carga fija</div>';
+}
+
+function gymCardPesoMuerto(pm){
+  return gymExCard(
+    "Peso Muerto con Mancuernas",
+    {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
+    [
+      {label:"Series × Reps", value: pm.sx},
+      {label:"Descanso", value: pm.desc+" min"},
+    ],
+    pm.desc,
+    "PesoMuerto"
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Cadena posterior · carga moderada, prioridad técnica · sin RM</div>';
+}
+
+function gymCardSaltos(s){
+  return gymExCard(
+    "Saltos Horizontales",
+    {bg:"var(--pd)",txt:"var(--pt)",bd:"var(--purple)"},
+    [
+      {label:"Series × Reps", value: s.sx},
+      {label:"Descanso", value: s.desc+" min"},
+    ],
+    s.desc,
+    "Saltos"
+  ) + '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:8px 12px;margin-bottom:8px;font-size:11px;color:var(--faint);">Pliometría tras sentadilla (PAP) → potencia en agua · si la distancia cae &gt;10% entre series, se detiene esa batería</div>';
 }
 
 function gymCardRoller(){
