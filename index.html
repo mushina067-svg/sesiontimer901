@@ -2551,76 +2551,654 @@ function _histShortDate(dateStr){
   var m=String(dateStr).match(/^\s*(\d{1,2}\s+[a-záéíóú\.]+)/i);
   return m?m[1]:String(dateStr).slice(0,8);
 }
-function renderHistProgress(h){
-  // Ordena sesiones de más antigua a más reciente por id (Date.now al guardar)
-  var sessions=(h||[]).slice().sort(function(a,b){return (a&&a.id||0)-(b&&b.id||0);});
-  var bySwimmer={}, swOrder=[];
-  sessions.forEach(function(session){
-    if(!session)return;
-    var sdate=session.date||"";
-    (session.swimmers||[]).forEach(function(sw){
+// ══════════════════════════════════════════════════════════════════
+// PROGRESIÓN AVANZADA — análisis por distancia, comparativos y reporte
+// ══════════════════════════════════════════════════════════════════
+var PG={sw:null,period:"all",view:"dist",sort:"delta",minRec:1,open:{}};
+
+// ── utilidades ────────────────────────────────────────────────────
+function _pgMeters(dist){var m=String(dist||"").match(/(\d+)\s*m/i);return m?parseInt(m[1]):0;}
+function _pgFmt(ms){
+  if(ms===null||ms===undefined||isNaN(ms))return"—";
+  var neg=ms<0;var a=Math.abs(ms);
+  if(a<60000)return(neg?"-":"")+(a/1000).toFixed(2)+"s";
+  var m=Math.floor(a/60000),s=Math.floor((a%60000)/1000),c=Math.round((a%1000)/10);
+  if(c===100){c=0;s++;}
+  return(neg?"-":"")+m+":"+p2(s)+"."+p2(c);
+}
+function _pgSigned(ms){if(ms===null||ms===undefined||isNaN(ms))return"—";return(ms>0?"+":ms<0?"-":"")+_pgFmt(Math.abs(ms));}
+function _pgPct(v,dec){return(v>0?"+":"")+v.toFixed(dec===undefined?1:dec)+"%";}
+function _pgMean(a){if(!a.length)return 0;var s=0;for(var i=0;i<a.length;i++)s+=a[i];return s/a.length;}
+function _pgSd(a){if(a.length<2)return 0;var m=_pgMean(a),s=0;for(var i=0;i<a.length;i++)s+=(a[i]-m)*(a[i]-m);return Math.sqrt(s/(a.length-1));}
+function _pgSlope(a){ // regresión lineal simple: y=a+bx, x=0..n-1 → devuelve b
+  var n=a.length;if(n<2)return 0;
+  var sx=0,sy=0,sxy=0,sxx=0;
+  for(var i=0;i<n;i++){sx+=i;sy+=a[i];sxy+=i*a[i];sxx+=i*i;}
+  var den=n*sxx-sx*sx;if(!den)return 0;
+  return(n*sxy-sx*sy)/den;
+}
+function _pgW(){try{var w=window.innerWidth||1024;return w<560?430:(w<900?570:720);}catch(e){return 720;}}
+function _pgIntercept(a,b){var n=a.length;if(!n)return 0;var sx=0,sy=0;for(var i=0;i<n;i++){sx+=i;sy+=a[i];}return(sy-b*sx)/n;}
+
+function _pgPhase(s){
+  try{
+    var k=_histDateKey(s.date||"");
+    var m=(typeof MC!=="undefined"&&MC)?MC[k]:null;
+    if(m&&m.phase)return m.phase;
+    if(m&&m.desc)return m.desc;
+  }catch(e){}
+  return s.sessionType||"—";
+}
+
+// ── construcción del dataset ──────────────────────────────────────
+function _pgBuild(h,periodDays){
+  var cut=periodDays?Date.now()-periodDays*86400000:0;
+  var sessions=(h||[]).slice().filter(function(s){return s&&(!cut||(s.id||0)>=cut);})
+                      .sort(function(a,b){return(a.id||0)-(b.id||0);});
+  var map={},order=[];
+  sessions.forEach(function(ss){
+    (ss.swimmers||[]).forEach(function(sw){
       if(!sw||!sw.name)return;
-      var name=sw.name;
-      if(!bySwimmer[name]){bySwimmer[name]={};swOrder.push(name);}
-      var perDist={}; // mejor tiempo por distancia dentro de esta sesión
+      var S=map[sw.name];
+      if(!S){S={name:sw.name,dists:{},nSess:0,reps:0,meters:0,hits:0,withTarget:0,firstId:ss.id,lastId:ss.id};map[sw.name]=S;order.push(sw.name);}
+      S.nSess++;S.lastId=ss.id;
+      var per={};
       (sw.blocks||[]).forEach(function(bl){
         if(!bl||!bl.reps||!bl.reps.length)return;
-        var dist=bl.distance||"—";
+        var dist=bl.distance||"—",mts=_pgMeters(dist);
         bl.reps.forEach(function(r){
-          if(!r||typeof r.time!=="number"||!(r.time>0))return;
-          if(perDist[dist]===undefined||r.time<perDist[dist])perDist[dist]=r.time;
+          if(!r)return;
+          var t=(typeof r.time==="number")?r.time:0;
+          S.meters+=mts;
+          if(!(t>0))return;
+          S.reps++;
+          var tgt=(typeof r.targetMs==="number"&&r.targetMs>0)?r.targetMs:(bl.targetMs||0);
+          if(tgt>0){S.withTarget++;if((tgt/t)*100>=97)S.hits++;}
+          if(!per[dist])per[dist]={list:[],target:0,type:bl.type||"",name:bl.name||""};
+          per[dist].list.push(t);
+          if(tgt>0&&!per[dist].target)per[dist].target=tgt;
         });
       });
-      Object.keys(perDist).forEach(function(dist){
-        if(!bySwimmer[name][dist])bySwimmer[name][dist]=[];
-        bySwimmer[name][dist].push({date:sdate,best:perDist[dist]});
+      Object.keys(per).forEach(function(dist){
+        var L=per[dist].list;
+        if(!S.dists[dist])S.dists[dist]={dist:dist,meters:_pgMeters(dist),type:per[dist].type,sessions:[]};
+        S.dists[dist].sessions.push({
+          id:ss.id,date:ss.date||"",label:_histShortDate(ss.date||""),
+          best:Math.min.apply(null,L),worst:Math.max.apply(null,L),avg:_pgMean(L),
+          n:L.length,reps:L.slice(),target:per[dist].target,sessionType:ss.sessionType||""
+        });
       });
     });
   });
-  if(!swOrder.length){
-    return '<div style="text-align:center;color:var(--faint);font-size:13px;padding:3rem 0">No hay tiempos cronometrados todavía para mostrar progresión.<br><br><span style="font-size:11px">Aparecerá cuando haya sesiones guardadas con tiempos por distancia.</span></div>';
+  order.sort(function(a,b){return a.localeCompare(b);});
+  return{map:map,order:order,nSessions:sessions.length};
+}
+
+// ── métricas por distancia ────────────────────────────────────────
+function _pgStats(D,swName){
+  var ss=D.sessions,n=ss.length;
+  var bests=ss.map(function(x){return x.best;});
+  var pb=Math.min.apply(null,bests),pbIdx=bests.indexOf(pb);
+  var first=bests[0],last=bests[n-1];
+  var delta=last-first, deltaPct=first>0?(delta/first)*100:0;
+  var mean=_pgMean(bests),sd=_pgSd(bests),cv=mean>0?(sd/mean)*100:0;
+  var slope=_pgSlope(bests);
+  // forma reciente: media de las últimas 3 vs las 3 anteriores
+  var form=null;
+  if(n>=4){
+    var k=Math.min(3,Math.floor(n/2));
+    var rec=_pgMean(bests.slice(n-k)),prev=_pgMean(bests.slice(n-2*k,n-k));
+    form={rec:rec,prev:prev,diff:rec-prev,pct:prev>0?((rec-prev)/prev)*100:0,k:k};
   }
-  swOrder.sort(function(a,b){return a.localeCompare(b);});
-  var html='<div style="font-size:10px;color:var(--faint);margin-bottom:10px;line-height:1.5">Mejor tiempo por distancia en cada sesión, de la más antigua a la más reciente. ★ = mejor marca. La tendencia compara el primer registro con el último.</div>';
-  swOrder.forEach(function(name){
-    var dists=bySwimmer[name];
-    var distKeys=Object.keys(dists).sort(function(a,b){return dists[b].length-dists[a].length || a.localeCompare(b);});
-    html+='<div style="background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);margin-bottom:12px;overflow:hidden;">';
-    html+='<div style="padding:9px 14px;background:var(--surf2);border-bottom:.5px solid var(--b1);font-size:14px;font-weight:600;color:var(--text);">🏊 '+esc(name)
-      +' <span style="font-size:10px;color:var(--faint);font-weight:400;">'+distKeys.length+' distancia'+(distKeys.length!==1?"s":"")+'</span></div>';
-    distKeys.forEach(function(dist){
-      var pts=dists[dist];
-      var pb=null,pbDate="";
-      pts.forEach(function(p){if(pb===null||p.best<pb){pb=p.best;pbDate=p.date;}});
-      var first=pts[0].best, latest=pts[pts.length-1].best, delta=latest-first;
-      var trend="";
-      if(pts.length>=2){
-        if(delta<0)trend='<span class="c-good" style="font-size:11px;">▼ '+(Math.abs(delta)/1000).toFixed(2)+'s más rápido</span>';
-        else if(delta>0)trend='<span class="c-bad" style="font-size:11px;">▲ '+(delta/1000).toFixed(2)+'s más lento</span>';
-        else trend='<span style="font-size:11px;color:var(--muted);">= sin cambio</span>';
-      }
-      var mini=pts.map(function(p,i){
-        var isPB=(p.best===pb);
-        var col="var(--muted)";
-        if(i>0)col=(p.best<pts[i-1].best)?"var(--gt)":(p.best>pts[i-1].best)?"var(--rt)":"var(--muted)";
-        return '<span style="font-size:10px;color:var(--faint);white-space:nowrap;">'+esc(_histShortDate(p.date))
-          +' <span style="color:'+col+';font-family:var(--mono);">'+fmtS(p.best)+(isPB?' ★':'')+'</span></span>';
-      }).join(' <span style="color:var(--faint);">·</span> ');
-      html+='<div style="padding:8px 14px;border-bottom:.5px solid var(--b1);">'
-        +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-          +'<span style="font-size:12px;color:var(--text);font-weight:500;flex:1;min-width:120px;">'+esc(dist)+'</span>'
-          +'<span style="font-size:10px;color:var(--faint);">'+pts.length+' reg.</span>'
+  // fatiga intra-sesión (sesiones con 3+ reps): media 2ª mitad vs 1ª mitad
+  var fat=[],intraCv=[];
+  ss.forEach(function(s){
+    if(s.n>=3){
+      var half=Math.floor(s.n/2);
+      var a=_pgMean(s.reps.slice(0,half)),b=_pgMean(s.reps.slice(s.n-half));
+      if(a>0)fat.push(((b-a)/a)*100);
+    }
+    if(s.n>=2){var m=_pgMean(s.reps);if(m>0)intraCv.push((_pgSd(s.reps)/m)*100);}
+  });
+  var ref=0;try{ref=getRef(swName,D.dist)||0;}catch(e){ref=0;}
+  var totalReps=0;ss.forEach(function(s){totalReps+=s.n;});
+  var speed=(D.meters>0&&pb>0)?(D.meters/(pb/1000)):0;
+  // días desde el PB
+  var pbAgeDays=Math.round((Date.now()-ss[pbIdx].id)/86400000);
+  return{
+    n:n,totalReps:totalReps,bests:bests,pb:pb,pbIdx:pbIdx,pbDate:ss[pbIdx].label,pbAgeDays:pbAgeDays,
+    first:first,last:last,delta:delta,deltaPct:deltaPct,mean:mean,sd:sd,cv:cv,slope:slope,
+    form:form,fatigue:fat.length?_pgMean(fat):null,intraCv:intraCv.length?_pgMean(intraCv):null,
+    ref:ref,refPct:(ref>0&&pb>0)?(ref/pb)*100:0,refDiff:ref>0?pb-ref:null,speed:speed,
+    isPbLast:pbIdx===n-1
+  };
+}
+
+// ── paletas ───────────────────────────────────────────────────────
+var PG_DARK={bg:"transparent",grid:"rgba(255,255,255,0.07)",axis:"#444",text:"#888",faint:"#555",
+  line:"#5aaff0",dot:"#5aaff0",band:"rgba(90,175,240,0.20)",pb:"#4cd97b",ref:"#FAC775",
+  trend:"rgba(255,255,255,0.28)",good:"#4cd97b",bad:"#f07070",surf:"#161616"};
+var PG_LIGHT={bg:"#fff",grid:"rgba(0,0,0,0.08)",axis:"#999",text:"#555",faint:"#999",
+  line:"#1a6fb5",dot:"#1a6fb5",band:"rgba(26,111,181,0.18)",pb:"#1a9e4a",ref:"#b8860b",
+  trend:"rgba(0,0,0,0.25)",good:"#1a9e4a",bad:"#b52020",surf:"#fff"};
+
+// ── gráfico de líneas por distancia ───────────────────────────────
+// Eje Y INVERTIDO: los tiempos más rápidos quedan arriba.
+function _pgChart(ss,st,P,W,H){
+  P=P||PG_DARK;W=W||_pgW();H=H||Math.round(W*0.29)+10;
+  var padL=Math.min(62,W*0.11),padR=Math.min(52,W*0.085),padT=16,padB=26;
+  var pw=W-padL-padR,ph=H-padT-padB;
+  var vals=[];
+  ss.forEach(function(s){vals.push(s.best);vals.push(s.worst);});
+  if(st.ref>0&&st.ref<st.pb*2.2&&st.ref>st.pb*0.45)vals.push(st.ref);
+  var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals);
+  if(mx-mn<1){mx=mn+1;}
+  var pad=(mx-mn)*0.12;mn-=pad;mx+=pad;
+  var n=ss.length;
+  function X(i){return n<2?padL+pw/2:padL+(i/(n-1))*pw;}
+  function Y(v){return padT+((v-mn)/(mx-mn))*ph;}
+  var g='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;height:auto;font-family:-apple-system,BlinkMacSystemFont,sans-serif" preserveAspectRatio="xMidYMid meet">';
+  // grilla + etiquetas Y
+  for(var k=0;k<=3;k++){
+    var v=mn+(k/3)*(mx-mn),y=Y(v);
+    g+='<line x1="'+padL+'" y1="'+y.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+y.toFixed(1)+'" stroke="'+P.grid+'" stroke-width="1"/>';
+    g+='<text x="'+(padL-7)+'" y="'+(y+3.5).toFixed(1)+'" text-anchor="end" font-size="9.5" fill="'+P.text+'" font-family="Courier New,monospace">'+_pgFmt(v)+'</text>';
+  }
+  g+='<text x="4" y="'+(padT+8)+'" font-size="8.5" fill="'+P.faint+'">rápido</text>';
+  // línea de referencia
+  if(st.ref>0&&st.ref>=mn&&st.ref<=mx){
+    var yr=Y(st.ref);
+    g+='<line x1="'+padL+'" y1="'+yr.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yr.toFixed(1)+'" stroke="'+P.ref+'" stroke-width="1.2" stroke-dasharray="5,4" opacity=".85"/>';
+    g+='<text x="'+(W-padR+5)+'" y="'+(yr+3).toFixed(1)+'" font-size="9" fill="'+P.ref+'">Ref</text>';
+  }
+  // línea de mejor marca
+  var yp=Y(st.pb);
+  g+='<line x1="'+padL+'" y1="'+yp.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+yp.toFixed(1)+'" stroke="'+P.pb+'" stroke-width="1.2" stroke-dasharray="3,4" opacity=".8"/>';
+  g+='<text x="'+(W-padR+5)+'" y="'+(yp+3).toFixed(1)+'" font-size="9" fill="'+P.pb+'">PB</text>';
+  // rango de reps por sesión (mejor↔peor)
+  ss.forEach(function(s,i){
+    if(s.worst>s.best){
+      g+='<line x1="'+X(i).toFixed(1)+'" y1="'+Y(s.best).toFixed(1)+'" x2="'+X(i).toFixed(1)+'" y2="'+Y(s.worst).toFixed(1)+'" stroke="'+P.band+'" stroke-width="5" stroke-linecap="round"/>';
+    }
+  });
+  // tendencia
+  if(n>=3){
+    var b=_pgSlope(st.bests),a=_pgIntercept(st.bests,b);
+    var y0=a,y1=a+b*(n-1);
+    if(y0>=mn&&y0<=mx&&y1>=mn&&y1<=mx){
+      g+='<line x1="'+X(0).toFixed(1)+'" y1="'+Y(y0).toFixed(1)+'" x2="'+X(n-1).toFixed(1)+'" y2="'+Y(y1).toFixed(1)+'" stroke="'+P.trend+'" stroke-width="1.5" stroke-dasharray="7,5"/>';
+    }
+  }
+  // polilínea de mejores
+  if(n>=2){
+    var d="";
+    ss.forEach(function(s,i){d+=(i?" L":"M")+X(i).toFixed(1)+" "+Y(s.best).toFixed(1);});
+    g+='<path d="'+d+'" fill="none" stroke="'+P.line+'" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+  }
+  // puntos
+  ss.forEach(function(s,i){
+    var isPb=(i===st.pbIdx),isLast=(i===n-1);
+    var r=isPb?5:(isLast?4.2:3.2);
+    var fill=isPb?P.pb:(isLast?P.line:P.surf);
+    g+='<circle cx="'+X(i).toFixed(1)+'" cy="'+Y(s.best).toFixed(1)+'" r="'+r+'" fill="'+fill+'" stroke="'+(isPb?P.pb:P.line)+'" stroke-width="1.8"><title>'+esc(s.label)+' — mejor '+_pgFmt(s.best)+' ('+s.n+' rep'+(s.n!==1?"s":"")+')</title></circle>';
+  });
+  // valor de la última sesión
+  if(n>=1){
+    var lx=X(n-1),ly=Y(ss[n-1].best);
+    g+='<text x="'+(lx-6).toFixed(1)+'" y="'+(ly-9).toFixed(1)+'" text-anchor="end" font-size="10" font-weight="600" fill="'+P.line+'" font-family="Courier New,monospace">'+_pgFmt(ss[n-1].best)+'</text>';
+  }
+  // etiquetas X (máx. 6)
+  var step=Math.max(1,Math.ceil(n/6));
+  ss.forEach(function(s,i){
+    if(i%step!==0&&i!==n-1)return;
+    g+='<text x="'+X(i).toFixed(1)+'" y="'+(H-8)+'" text-anchor="middle" font-size="9" fill="'+P.text+'">'+esc(s.label)+'</text>';
+  });
+  g+='</svg>';
+  return g;
+}
+
+// ── gráfico de barras horizontales (comparativo entre distancias) ─
+function _pgBars(rows,P,W){
+  P=P||PG_DARK;W=W||_pgW();
+  if(!rows.length)return"";
+  var rowH=22,padL=Math.min(175,W*0.32),padR=Math.min(58,W*0.13),padT=8,padB=8;
+  var H=padT+padB+rows.length*rowH;
+  var maxAbs=0;rows.forEach(function(r){maxAbs=Math.max(maxAbs,Math.abs(r.value));});
+  if(maxAbs<=0)maxAbs=1;
+  var pw=W-padL-padR,cx=padL+pw/2;
+  var _pgCut=Math.max(14,Math.floor(padL/6.2));
+  var g='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;height:auto;font-family:-apple-system,BlinkMacSystemFont,sans-serif" preserveAspectRatio="xMidYMid meet">';
+  g+='<line x1="'+cx+'" y1="'+padT+'" x2="'+cx+'" y2="'+(H-padB)+'" stroke="'+P.grid+'" stroke-width="1"/>';
+  rows.forEach(function(r,i){
+    var y=padT+i*rowH,w=Math.abs(r.value)/maxAbs*(pw/2-4);
+    var good=r.value<0; // negativo = bajó el tiempo = mejora
+    var col=good?P.good:P.bad;
+    var x=good?cx-w:cx;
+    g+='<text x="'+(padL-8)+'" y="'+(y+rowH/2+3.5)+'" text-anchor="end" font-size="10.5" fill="'+P.text+'">'+esc(r.label.length>_pgCut?r.label.slice(0,_pgCut-1)+"…":r.label)+'</text>';
+    g+='<rect x="'+x.toFixed(1)+'" y="'+(y+5)+'" width="'+Math.max(1.5,w).toFixed(1)+'" height="'+(rowH-11)+'" rx="2" fill="'+col+'" opacity=".8"><title>'+esc(r.label)+': '+r.text+'</title></rect>';
+    var tx=good?cx-w-6:cx+w+6;
+    g+='<text x="'+tx.toFixed(1)+'" y="'+(y+rowH/2+3.5)+'" text-anchor="'+(good?"end":"start")+'" font-size="10" fill="'+col+'" font-family="Courier New,monospace">'+esc(r.text)+'</text>';
+  });
+  g+='</svg>';
+  return g;
+}
+
+// ── barras de reps de una sesión (perfil intra-sesión) ────────────
+function _pgRepBars(reps,target,P,W){
+  P=P||PG_DARK;W=W||_pgW();
+  var n=reps.length;if(!n)return"";
+  var H=64,padT=6,padB=14,ph=H-padT-padB;
+  var mx=Math.max.apply(null,reps),mn=Math.min.apply(null,reps);
+  var lo=mn-(mx-mn)*0.35-1,hi=mx+(mx-mn)*0.1+1;
+  var bw=Math.min(38,(W-8)/n-6),gap=6;
+  var totalW=n*bw+(n-1)*gap,x0=(W-totalW)/2;
+  var g='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;height:auto;font-family:-apple-system,BlinkMacSystemFont,sans-serif" preserveAspectRatio="xMidYMid meet">';
+  if(target>0&&target>lo&&target<hi){
+    var yt=padT+ph-((target-lo)/(hi-lo))*ph;
+    g+='<line x1="0" y1="'+yt.toFixed(1)+'" x2="'+W+'" y2="'+yt.toFixed(1)+'" stroke="'+P.ref+'" stroke-width="1" stroke-dasharray="4,4" opacity=".8"/>';
+  }
+  reps.forEach(function(t,i){
+    var hgt=Math.max(2,((t-lo)/(hi-lo))*ph);
+    var x=x0+i*(bw+gap),y=padT+ph-hgt;
+    var col=(t===mn)?P.good:(target>0&&t>target)?P.bad:P.line;
+    g+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+hgt.toFixed(1)+'" rx="2" fill="'+col+'" opacity=".75"><title>Rep '+(i+1)+': '+_pgFmt(t)+'</title></rect>';
+    g+='<text x="'+(x+bw/2).toFixed(1)+'" y="'+(H-4)+'" text-anchor="middle" font-size="8.5" fill="'+P.text+'" font-family="Courier New,monospace">'+_pgFmt(t)+'</text>';
+  });
+  g+='</svg>';
+  return g;
+}
+
+// ── controles ─────────────────────────────────────────────────────
+function _pgSetSw(i){var d=PG.period==="all"?0:parseInt(PG.period);var b=_pgBuild(getHist(),d);PG.sw=b.order[i]||null;renderHistory();}
+function _pgSetPeriod(d){PG.period=d;renderHistory();}
+function _pgSetView(v){PG.view=v;renderHistory();}
+function _pgSetSort(s){PG.sort=(PG.sort===s)?("-"+s):s;renderHistory();}
+function _pgToggle(key){PG.open[key]=!PG.open[key];renderHistory();}
+function _pgBtn(active,label,handler){
+  return'<button onclick="'+handler+'" style="padding:5px 11px;border-radius:var(--rs);font-size:11.5px;cursor:pointer;font-family:inherit;border:.5px solid '+(active?"var(--gb)":"var(--b2)")+';background:'+(active?"var(--gd)":"var(--surf2)")+';color:'+(active?"var(--gt)":"var(--muted)")+';">'+label+'</button>';
+}
+function _pgKpi(label,value,sub,color){
+  return'<div style="background:var(--surf2);border:.5px solid var(--b1);border-radius:var(--rs);padding:8px 10px;">'
+    +'<div style="font-size:9px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;">'+label+'</div>'
+    +'<div style="font-size:17px;font-weight:700;color:'+(color||"var(--text)")+';font-family:var(--mono);margin-top:2px;">'+value+'</div>'
+    +(sub?'<div style="font-size:9.5px;color:var(--faint);margin-top:1px;">'+sub+'</div>':'')
+  +'</div>';
+}
+
+// ── vista principal ───────────────────────────────────────────────
+function renderHistProgress(h){
+  var days=PG.period==="all"?0:parseInt(PG.period);
+  var B=_pgBuild(h,days);
+  if(!B.order.length){
+    return'<div style="text-align:center;color:var(--faint);font-size:13px;padding:3rem 0">Todavía no hay tiempos cronometrados en este período.<br><br><span style="font-size:11px">Cambiá el filtro de período o guardá una sesión con tiempos por distancia.</span></div>';
+  }
+  if(!PG.sw||!B.map[PG.sw])PG.sw=B.order[0];
+  var S=B.map[PG.sw];
+
+  // barra de controles
+  var html='<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;">';
+  if(B.order.length>1){
+    B.order.forEach(function(nm,i){
+      html+=_pgBtn(nm===PG.sw,"🏊 "+esc(nm),"_pgSetSw("+i+")");
+    });
+    html+='<span style="width:8px"></span>';
+  }
+  html+=_pgBtn(PG.period==="all","Todo","_pgSetPeriod(\'all\')")
+      +_pgBtn(PG.period==="90","90 días","_pgSetPeriod(\'90\')")
+      +_pgBtn(PG.period==="30","30 días","_pgSetPeriod(\'30\')");
+  html+='<div style="margin-left:auto;display:flex;gap:4px;">'
+      +_pgBtn(PG.view==="dist","📈 Por distancia","_pgSetView(\'dist\')")
+      +_pgBtn(PG.view==="tabla","▦ Comparativo","_pgSetView(\'tabla\')")
+      +(B.order.length>1?_pgBtn(PG.view==="nadadores","👥 Nadadores","_pgSetView(\'nadadores\')"):"")
+      +'<button onclick="_pgReport()" style="padding:5px 11px;border-radius:var(--rs);font-size:11.5px;cursor:pointer;font-family:inherit;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);">🖨️ Reporte</button>'
+      +'</div></div>';
+
+  // distancias ordenadas
+  var keys=Object.keys(S.dists);
+  var ST={};keys.forEach(function(k){ST[k]=_pgStats(S.dists[k],S.name);});
+  var withData=keys.filter(function(k){return ST[k].n>=2;});
+  var single=keys.filter(function(k){return ST[k].n<2;});
+
+  // KPIs del nadador
+  var pbRecent=0;
+  keys.forEach(function(k){if(ST[k].pbAgeDays<=30)pbRecent++;});
+  var improved=0,worsened=0;
+  withData.forEach(function(k){if(ST[k].delta<0)improved++;else if(ST[k].delta>0)worsened++;});
+  var hitPct=S.withTarget>0?(S.hits/S.withTarget*100):null;
+  html+='<div style="background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:8px;">🏊 '+esc(S.name)
+      +' <span style="font-size:10px;color:var(--faint);font-weight:400;">'+keys.length+' distancia'+(keys.length!==1?"s":"")+' · '+S.nSess+' sesion'+(S.nSess!==1?"es":"")+'</span></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:6px;">'
+      +_pgKpi("Reps cronometradas",String(S.reps),"","var(--text)")
+      +_pgKpi("Volumen medido",(S.meters>=1000?(S.meters/1000).toFixed(1)+" km":S.meters+" m"),"suma de reps")
+      +_pgKpi("Distancias en mejora",improved+"/"+withData.length,worsened+" en retroceso",improved>=worsened?"var(--gt)":"var(--at)")
+      +_pgKpi("PB últimos 30 d",String(pbRecent),"de "+keys.length+" distancias","var(--gt)")
+      +(hitPct!==null?_pgKpi("Objetivo cumplido",hitPct.toFixed(0)+"%","reps ≥97% del target",hitPct>=70?"var(--gt)":hitPct>=40?"var(--at)":"var(--rt)"):"")
+    +'</div></div>';
+
+  if(PG.view==="tabla")      html+=_pgViewTable(S,ST,keys);
+  else if(PG.view==="nadadores") html+=_pgViewSwimmers(B);
+  else                       html+=_pgViewDist(S,ST,withData,single);
+  return html;
+}
+
+// ── vista: por distancia ──────────────────────────────────────────
+function _pgViewDist(S,ST,withData,single){
+  withData=withData.slice().sort(function(a,b){return ST[b].n-ST[a].n||a.localeCompare(b);});
+  var html='<div style="font-size:10px;color:var(--faint);margin-bottom:8px;line-height:1.5;">'
+    +'Cada punto = mejor tiempo de esa distancia en esa sesión. La barra vertical cubre el rango de todas las reps (mejor↔peor). '
+    +'<b style="color:var(--muted)">Eje Y invertido: más arriba = más rápido.</b> El eje X ordena sesiones consecutivas (no es proporcional al calendario). '
+    +'Línea punteada verde = mejor marca; amarilla = tiempo de referencia del perfil; gris = tendencia (regresión lineal).</div>';
+
+  if(!withData.length){
+    html+='<div style="color:var(--faint);font-size:12px;padding:1rem 0;text-align:center;">Todavía no hay ninguna distancia con 2 o más sesiones para graficar progresión.</div>';
+  }
+
+  withData.forEach(function(dist){
+    var D=S.dists[dist],st=ST[dist],key=(S.name+"_"+dist).replace(/[^a-z0-9]/gi,"_");
+    var isOpen=!!PG.open[key];
+    var dCol=st.delta<0?"var(--gt)":st.delta>0?"var(--rt)":"var(--muted)";
+    var dTxt=st.delta<0?"▼ "+_pgFmt(Math.abs(st.delta))+" más rápido":st.delta>0?"▲ "+_pgFmt(st.delta)+" más lento":"= sin cambio";
+
+    html+='<div style="background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r);margin-bottom:10px;overflow:hidden;">';
+    // cabecera
+    html+='<div style="padding:9px 12px;background:var(--surf2);border-bottom:.5px solid var(--b1);display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +'<span style="font-size:13px;font-weight:600;flex:1;min-width:130px;">'+esc(dist)+'</span>'
+      +'<span style="font-size:10.5px;color:var(--faint);">'+st.n+' ses. · '+st.totalReps+' reps</span>'
+      +'<span style="font-size:11px;color:'+dCol+';font-weight:500;">'+dTxt+'</span>'
+    +'</div>';
+    // métricas
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;padding:9px 12px 4px;">'
+      +_pgKpi("Mejor marca",_pgFmt(st.pb),st.pbDate+(st.isPbLast?" · última":" · hace "+st.pbAgeDays+" d"),"var(--gt)")
+      +_pgKpi("Última",_pgFmt(st.last),_pgSigned(st.last-st.pb)+" vs PB",st.last<=st.pb?"var(--gt)":"var(--text)")
+      +_pgKpi("Promedio",_pgFmt(st.mean),"±"+_pgFmt(st.sd))
+      +_pgKpi("Consistencia",st.cv.toFixed(1)+"%",st.cv<2?"muy estable":st.cv<4?"estable":"variable",st.cv<2?"var(--gt)":st.cv<4?"var(--at)":"var(--rt)")
+      +_pgKpi("Tendencia",(st.slope<0?"":"+")+(st.slope/1000).toFixed(3)+"s",st.n>=3?"por sesión":"pocos datos",st.slope<0?"var(--gt)":st.slope>0?"var(--rt)":"var(--muted)")
+      +(st.ref>0?_pgKpi("vs Referencia",_pgSigned(st.refDiff),st.refPct.toFixed(1)+"% del ref.",st.refDiff<=0?"var(--gt)":"var(--at)"):"")
+      +(st.speed>0?_pgKpi("Velocidad",st.speed.toFixed(2)+" m/s","en la mejor marca"):"")
+      +(st.form?_pgKpi("Forma reciente",_pgSigned(st.form.diff),"últimas "+st.form.k+" vs "+st.form.k+" previas",st.form.diff<0?"var(--gt)":st.form.diff>0?"var(--rt)":"var(--muted)"):"")
+    +'</div>';
+    // gráfico
+    html+='<div style="padding:2px 8px 6px;">'+_pgChart(D.sessions,st,PG_DARK)+'</div>';
+    // detalle plegable
+    html+='<div style="padding:0 12px 10px;">'
+      +'<button onclick="_pgToggle(\''+key+'\')" style="width:100%;padding:6px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;">'
+      +(isOpen?"▲ Ocultar detalle sesión a sesión":"▼ Ver detalle sesión a sesión")+'</button>';
+    if(isOpen)html+=_pgDetail(D,st);
+    html+='</div></div>';
+  });
+
+  if(single.length){
+    html+='<div style="background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r);padding:10px 12px;margin-bottom:10px;">'
+      +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Con un solo registro (sin progresión todavía)</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    single.forEach(function(d){
+      html+='<span style="font-size:10.5px;background:var(--surf2);border:.5px solid var(--b1);border-radius:4px;padding:3px 7px;color:var(--muted);">'+esc(d)+' <b style="font-family:var(--mono);color:var(--text)">'+_pgFmt(ST[d].pb)+'</b></span>';
+    });
+    html+='</div></div>';
+  }
+  return html;
+}
+
+// ── detalle sesión a sesión ───────────────────────────────────────
+function _pgDetail(D,st){
+  var html='<div style="margin-top:8px;overflow-x:auto;">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:11px;">'
+    +'<tr style="color:var(--faint);font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;">'
+      +'<th style="text-align:left;padding:4px 6px;font-weight:500;">Fecha</th>'
+      +'<th style="text-align:left;padding:4px 6px;font-weight:500;">Fase / sesión</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-weight:500;">Reps</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-weight:500;">Mejor</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-weight:500;">Media</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-weight:500;">Peor</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-weight:500;">Δ ant.</th>'
+      +'<th style="text-align:right;padding:4px 6px;font-weight:500;">Δ PB</th>'
+    +'</tr>';
+  D.sessions.forEach(function(s,i){
+    var prev=i>0?D.sessions[i-1].best:null;
+    var d=prev!==null?s.best-prev:null;
+    var dCol=d===null?"var(--faint)":d<0?"var(--gt)":d>0?"var(--rt)":"var(--muted)";
+    var dPb=s.best-st.pb;
+    html+='<tr style="border-top:.5px solid var(--b1);">'
+      +'<td style="padding:4px 6px;color:var(--muted);">'+esc(s.label)+(i===st.pbIdx?' <span style="color:var(--gt)">★</span>':'')+'</td>'
+      +'<td style="padding:4px 6px;color:var(--faint);font-size:10px;">'+esc(_pgPhase(s))+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;color:var(--faint);">'+s.n+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-family:var(--mono);color:'+(i===st.pbIdx?"var(--gt)":"var(--text)")+';">'+_pgFmt(s.best)+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-family:var(--mono);color:var(--muted);">'+_pgFmt(s.avg)+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-family:var(--mono);color:var(--faint);">'+_pgFmt(s.worst)+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-family:var(--mono);color:'+dCol+';">'+(d===null?"—":_pgSigned(d))+'</td>'
+      +'<td style="padding:4px 6px;text-align:right;font-family:var(--mono);color:var(--faint);">'+(dPb===0?"PB":_pgSigned(dPb))+'</td>'
+    +'</tr>';
+  });
+  html+='</table></div>';
+  // perfil de la última sesión
+  var last=D.sessions[D.sessions.length-1];
+  if(last.n>=2){
+    html+='<div style="margin-top:10px;">'
+      +'<div style="font-size:10px;color:var(--faint);margin-bottom:2px;">Reps de la última sesión ('+esc(last.label)+') en orden'+(last.target>0?' · línea amarilla = objetivo '+_pgFmt(last.target):'')+'</div>'
+      +_pgRepBars(last.reps,last.target,PG_DARK)+'</div>';
+  }
+  if(st.fatigue!==null){
+    var f=st.fatigue;
+    html+='<div style="margin-top:8px;font-size:10.5px;color:var(--muted);">Caída intra-sesión media: '
+      +'<b style="color:'+(f>2?"var(--rt)":f>0?"var(--at)":"var(--gt)")+'">'+_pgPct(f)+'</b>'
+      +' <span style="color:var(--faint)">(segunda mitad de las reps vs primera mitad, en sesiones con 3+ reps)</span></div>';
+  }
+  return html;
+}
+
+// ── vista: tabla comparativa entre distancias ─────────────────────
+function _pgViewTable(S,ST,keys){
+  var desc=PG.sort.charAt(0)==="-",sk=desc?PG.sort.slice(1):PG.sort;
+  var rows=keys.slice().filter(function(k){return ST[k].n>=1;});
+  rows.sort(function(a,b){
+    var A=ST[a],Bb=ST[b],va,vb;
+    if(sk==="dist"){return desc?b.localeCompare(a):a.localeCompare(b);}
+    if(sk==="n"){va=A.n;vb=Bb.n;}
+    else if(sk==="pb"){va=A.pb;vb=Bb.pb;}
+    else if(sk==="cv"){va=A.cv;vb=Bb.cv;}
+    else if(sk==="speed"){va=A.speed;vb=Bb.speed;}
+    else{va=A.n>=2?A.deltaPct:999;vb=Bb.n>=2?Bb.deltaPct:999;}
+    return desc?vb-va:va-vb;
+  });
+  function th(label,k,align){
+    return'<th onclick="_pgSetSort(\''+k+'\')" style="text-align:'+(align||"right")+';padding:6px;font-weight:500;cursor:pointer;color:'+(sk===k?"var(--gt)":"var(--faint)")+';">'+label+(sk===k?(desc?" ▼":" ▲"):"")+'</th>';
+  }
+  var html='<div style="background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;overflow-x:auto;">'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Comparativo entre distancias — tocá una cabecera para reordenar</div>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:11.5px;min-width:640px;">'
+    +'<tr style="font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;">'
+      +th("Distancia","dist","left")+th("Ses.","n")+th("Mejor","pb")
+      +'<th style="text-align:right;padding:6px;font-weight:500;color:var(--faint);">Última</th>'
+      +th("Δ total","delta")
+      +'<th style="text-align:right;padding:6px;font-weight:500;color:var(--faint);">Tend./ses.</th>'
+      +th("CV%","cv")+th("m/s","speed")
+      +'<th style="text-align:right;padding:6px;font-weight:500;color:var(--faint);">vs Ref</th>'
+    +'</tr>';
+  rows.forEach(function(k){
+    var st=ST[k];
+    var dCol=st.n<2?"var(--faint)":st.delta<0?"var(--gt)":st.delta>0?"var(--rt)":"var(--muted)";
+    html+='<tr style="border-top:.5px solid var(--b1);">'
+      +'<td style="padding:6px;color:var(--text);">'+esc(k)+'</td>'
+      +'<td style="padding:6px;text-align:right;color:var(--faint);">'+st.n+'</td>'
+      +'<td style="padding:6px;text-align:right;font-family:var(--mono);color:var(--gt);">'+_pgFmt(st.pb)+'</td>'
+      +'<td style="padding:6px;text-align:right;font-family:var(--mono);color:var(--muted);">'+_pgFmt(st.last)+'</td>'
+      +'<td style="padding:6px;text-align:right;font-family:var(--mono);color:'+dCol+';">'+(st.n<2?"—":_pgSigned(st.delta)+" ("+_pgPct(st.deltaPct)+")")+'</td>'
+      +'<td style="padding:6px;text-align:right;font-family:var(--mono);color:'+(st.slope<0?"var(--gt)":st.slope>0?"var(--rt)":"var(--faint)")+';">'+(st.n<3?"—":(st.slope<0?"":"+")+(st.slope/1000).toFixed(3)+"s")+'</td>'
+      +'<td style="padding:6px;text-align:right;font-family:var(--mono);color:'+(st.cv<2?"var(--gt)":st.cv<4?"var(--at)":"var(--rt)")+';">'+(st.n<2?"—":st.cv.toFixed(1))+'</td>'
+      +'<td style="padding:6px;text-align:right;font-family:var(--mono);color:var(--muted);">'+(st.speed>0?st.speed.toFixed(2):"—")+'</td>'
+      +'<td style="padding:6px;text-align:right;font-family:var(--mono);color:'+(st.ref>0?(st.refDiff<=0?"var(--gt)":"var(--at)"):"var(--faint)")+';">'+(st.ref>0?_pgSigned(st.refDiff):"—")+'</td>'
+    +'</tr>';
+  });
+  html+='</table>'
+    +'<div style="font-size:9.5px;color:var(--faint);margin-top:8px;line-height:1.5;">Δ total = primera sesión vs última. Tend./ses. = pendiente de la regresión lineal sobre los mejores tiempos (negativo = mejorando). CV% = desviación estándar de los mejores tiempos sobre su media (menor = más consistente). m/s calculado con la mejor marca. vs Ref = mejor marca menos el tiempo de referencia del perfil (Config).</div>'
+  +'</div>';
+
+  // barras de mejora
+  var bars=rows.filter(function(k){return ST[k].n>=2;}).map(function(k){
+    return{label:k,value:ST[k].deltaPct,text:_pgPct(ST[k].deltaPct)};
+  }).sort(function(a,b){return a.value-b.value;});
+  if(bars.length){
+    html+='<div style="background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r);padding:10px 12px;margin-bottom:12px;">'
+      +'<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Cambio porcentual por distancia (primera vs última sesión)</div>'
+      +'<div style="font-size:9.5px;color:var(--faint);margin-bottom:6px;">Izquierda / verde = tiempo más rápido. Derecha / rojo = tiempo más lento.</div>'
+      +_pgBars(bars,PG_DARK)+'</div>';
+  }
+  return html;
+}
+
+// ── vista: comparativa entre nadadores ────────────────────────────
+function _pgViewSwimmers(B){
+  var shared={};
+  B.order.forEach(function(nm){
+    var S=B.map[nm];
+    Object.keys(S.dists).forEach(function(d){
+      if(!shared[d])shared[d]=[];
+      var st=_pgStats(S.dists[d],nm);
+      shared[d].push({name:nm,st:st});
+    });
+  });
+  var dists=Object.keys(shared).filter(function(d){return shared[d].length>=2;})
+    .sort(function(a,b){return shared[b].length-shared[a].length||a.localeCompare(b);});
+  if(!dists.length){
+    return'<div style="color:var(--faint);font-size:12px;text-align:center;padding:2rem 0;">No hay distancias registradas por dos o más nadadores en este período.</div>';
+  }
+  var html='<div style="font-size:10px;color:var(--faint);margin-bottom:8px;">Distancias que registraron dos o más nadadores, ordenados por mejor marca del período. La barra mide la diferencia con el más rápido: cuanto más larga, más lejos.</div>';
+  dists.forEach(function(d){
+    var list=shared[d].slice().sort(function(a,b){return a.st.pb-b.st.pb;});
+    var best=list[0].st.pb;
+    var maxGap=list[list.length-1].st.pb-best;
+    html+='<div style="background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r);margin-bottom:10px;overflow:hidden;">'
+      +'<div style="padding:8px 12px;background:var(--surf2);border-bottom:.5px solid var(--b1);font-size:12.5px;font-weight:600;">'+esc(d)
+      +' <span style="font-size:10px;color:var(--faint);font-weight:400;">'+list.length+' nadadores</span></div>'
+      +'<div style="padding:8px 12px;">';
+    list.forEach(function(e,i){
+      var gap=e.st.pb-best;
+      var pctBar=maxGap>0?(gap/maxGap)*100:0;
+      html+='<div style="margin-bottom:7px;">'
+        +'<div style="display:flex;align-items:baseline;gap:8px;font-size:11.5px;">'
+          +'<span style="flex:1;color:var(--text);">'+(i===0?"🥇 ":"")+esc(e.name)+'</span>'
+          +'<span style="font-family:var(--mono);color:'+(i===0?"var(--gt)":"var(--text)")+';">'+_pgFmt(e.st.pb)+'</span>'
+          +'<span style="font-family:var(--mono);font-size:10px;color:var(--faint);width:62px;text-align:right;">'+(gap===0?"—":"+"+_pgFmt(gap))+'</span>'
         +'</div>'
-        +'<div style="display:flex;gap:14px;margin-top:3px;flex-wrap:wrap;align-items:center;">'
-          +'<span style="font-size:11px;color:var(--muted);">Mejor <b class="c-good" style="font-family:var(--mono);">'+fmtS(pb)+'</b> <span style="color:var(--faint);">('+esc(_histShortDate(pbDate))+')</span></span>'
-          +trend
+        +'<div style="height:6px;background:var(--surf2);border-radius:3px;margin-top:3px;overflow:hidden;">'
+          +(i===0?'<div style="height:100%;width:100%;background:var(--gt);opacity:.28;"></div>'
+                 :'<div style="height:100%;width:'+Math.max(2,pctBar).toFixed(1)+'%;background:var(--at);opacity:.75;"></div>')
         +'</div>'
-        +'<div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;">'+mini+'</div>'
+        +'<div style="font-size:9.5px;color:var(--faint);margin-top:2px;">'+e.st.n+' ses. · última '+_pgFmt(e.st.last)
+          +(e.st.n>=2?' · Δ '+_pgSigned(e.st.delta):'')+'</div>'
       +'</div>';
     });
-    html+='</div>';
+    html+='</div></div>';
   });
   return html;
+}
+
+// ── reporte imprimible ────────────────────────────────────────────
+function _pgReport(){
+  var days=PG.period==="all"?0:parseInt(PG.period);
+  var B=_pgBuild(getHist(),days);
+  if(!B.order.length){alert("No hay datos para generar el reporte.");return;}
+  var name=PG.sw&&B.map[PG.sw]?PG.sw:B.order[0];
+  var S=B.map[name];
+  var keys=Object.keys(S.dists),ST={};
+  keys.forEach(function(k){ST[k]=_pgStats(S.dists[k],name);});
+  var withData=keys.filter(function(k){return ST[k].n>=2;}).sort(function(a,b){return ST[b].n-ST[a].n||a.localeCompare(b);});
+  var single=keys.filter(function(k){return ST[k].n<2;});
+  var P=PG_LIGHT;
+  var periodTxt=PG.period==="all"?"Historial completo":"Últimos "+PG.period+" días";
+  var today=new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"long",year:"numeric"});
+
+  var d='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte de progresión — '+esc(name)+'</title><style>'
+    +'*{box-sizing:border-box;margin:0;padding:0}'
+    +'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1a1a1a;background:#fff;padding:28px 32px;font-size:12px;line-height:1.45}'
+    +'h1{font-size:22px;letter-spacing:-.3px;margin-bottom:2px}'
+    +'h2{font-size:14px;margin:22px 0 8px;padding-bottom:4px;border-bottom:1.5px solid #1a1a1a}'
+    +'h3{font-size:13px;margin:0 0 4px}'
+    +'.sub{color:#666;font-size:11px;margin-bottom:18px}'
+    +'.kpis{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}'
+    +'.kpi{border:1px solid #ddd;border-radius:6px;padding:7px 11px;min-width:108px}'
+    +'.kpi .l{font-size:8.5px;text-transform:uppercase;letter-spacing:.6px;color:#777}'
+    +'.kpi .v{font-size:16px;font-weight:700;font-family:"Courier New",monospace}'
+    +'.kpi .s{font-size:9px;color:#888}'
+    +'.card{border:1px solid #ddd;border-radius:8px;padding:12px 14px;margin-bottom:12px;page-break-inside:avoid}'
+    +'table{width:100%;border-collapse:collapse;font-size:10.5px}'
+    +'th{text-align:right;padding:4px 6px;font-size:8.5px;text-transform:uppercase;letter-spacing:.4px;color:#777;font-weight:600;border-bottom:1px solid #ccc}'
+    +'th:first-child,td:first-child{text-align:left}'
+    +'td{padding:4px 6px;text-align:right;border-bottom:1px solid #eee;font-family:"Courier New",monospace}'
+    +'td:first-child{font-family:inherit}'
+    +'.good{color:#1a9e4a}.bad{color:#b52020}.mut{color:#777}'
+    +'.note{font-size:9px;color:#777;margin-top:6px;line-height:1.5}'
+    +'.tag{display:inline-block;font-size:9.5px;border:1px solid #ddd;border-radius:4px;padding:2px 6px;margin:2px 3px 2px 0}'
+    +'@media print{body{padding:0}.card{border-color:#ccc}.noprint{display:none}}'
+    +'</style></head><body>';
+  d+='<div class="noprint" style="text-align:right;margin-bottom:10px"><button onclick="window.print()" style="padding:8px 16px;font-size:12px;border-radius:6px;border:1px solid #1a9e4a;background:#1a9e4a;color:#fff;cursor:pointer">Imprimir / Guardar PDF</button></div>';
+  d+='<h1>Reporte de progresión — '+esc(name)+'</h1>';
+  d+='<div class="sub">'+periodTxt+' · '+S.nSess+' sesiones · generado el '+today+' · Wottrich Timer</div>';
+
+  var improved=0,worsened=0;
+  withData.forEach(function(k){if(ST[k].delta<0)improved++;else if(ST[k].delta>0)worsened++;});
+  var hitPct=S.withTarget>0?(S.hits/S.withTarget*100):null;
+  d+='<div class="kpis">'
+    +'<div class="kpi"><div class="l">Sesiones</div><div class="v">'+S.nSess+'</div></div>'
+    +'<div class="kpi"><div class="l">Reps cronometradas</div><div class="v">'+S.reps+'</div></div>'
+    +'<div class="kpi"><div class="l">Volumen medido</div><div class="v">'+(S.meters>=1000?(S.meters/1000).toFixed(1)+" km":S.meters+" m")+'</div></div>'
+    +'<div class="kpi"><div class="l">Distancias</div><div class="v">'+keys.length+'</div><div class="s">'+withData.length+' con progresión</div></div>'
+    +'<div class="kpi"><div class="l">En mejora</div><div class="v good">'+improved+'</div><div class="s">'+worsened+' en retroceso</div></div>'
+    +(hitPct!==null?'<div class="kpi"><div class="l">Objetivo cumplido</div><div class="v">'+hitPct.toFixed(0)+'%</div><div class="s">reps ≥97% del target</div></div>':'')
+  +'</div>';
+
+  // resumen
+  d+='<h2>Resumen por distancia</h2><table><tr><th>Distancia</th><th>Ses.</th><th>Mejor</th><th>Fecha PB</th><th>Última</th><th>Δ total</th><th>Tend./ses.</th><th>CV%</th><th>m/s</th><th>vs Ref</th></tr>';
+  keys.slice().sort(function(a,b){return(ST[a].n>=2?ST[a].deltaPct:999)-(ST[b].n>=2?ST[b].deltaPct:999);}).forEach(function(k){
+    var st=ST[k];
+    var cls=st.n<2?"mut":st.delta<0?"good":st.delta>0?"bad":"mut";
+    d+='<tr><td>'+esc(k)+'</td><td>'+st.n+'</td><td class="good">'+_pgFmt(st.pb)+'</td><td class="mut">'+esc(st.pbDate)+'</td><td>'+_pgFmt(st.last)+'</td>'
+      +'<td class="'+cls+'">'+(st.n<2?"—":_pgSigned(st.delta)+" ("+_pgPct(st.deltaPct)+")")+'</td>'
+      +'<td class="'+(st.slope<0?"good":st.slope>0?"bad":"mut")+'">'+(st.n<3?"—":(st.slope<0?"":"+")+(st.slope/1000).toFixed(3)+"s")+'</td>'
+      +'<td>'+(st.n<2?"—":st.cv.toFixed(1))+'</td><td>'+(st.speed>0?st.speed.toFixed(2):"—")+'</td>'
+      +'<td>'+(st.ref>0?_pgSigned(st.refDiff):"—")+'</td></tr>';
+  });
+  d+='</table><div class="note">Δ total = primera sesión del período frente a la última. Tend./ses. = pendiente de la regresión lineal sobre los mejores tiempos de cada sesión; negativo indica mejora. CV% = desviación estándar de los mejores tiempos dividida por su media. vs Ref = mejor marca menos el tiempo de referencia cargado en el perfil.</div>';
+
+  // gráfico comparativo
+  var bars=withData.map(function(k){return{label:k,value:ST[k].deltaPct,text:_pgPct(ST[k].deltaPct)};}).sort(function(a,b){return a.value-b.value;});
+  if(bars.length){
+    d+='<h2>Cambio porcentual por distancia</h2>'+_pgBars(bars,P,700)
+      +'<div class="note">Barras a la izquierda (verde) = el tiempo bajó. A la derecha (rojo) = el tiempo subió.</div>';
+  }
+
+  // fichas por distancia
+  d+='<h2>Evolución por distancia</h2>';
+  withData.forEach(function(k){
+    var st=ST[k],D=S.dists[k];
+    d+='<div class="card"><h3>'+esc(k)+'</h3>'
+      +'<div class="sub" style="margin-bottom:8px">'+st.n+' sesiones · '+st.totalReps+' reps · mejor '+_pgFmt(st.pb)+' ('+esc(st.pbDate)+')'
+      +' · Δ total <span class="'+(st.delta<0?"good":st.delta>0?"bad":"mut")+'">'+_pgSigned(st.delta)+'</span></div>'
+      +_pgChart(D.sessions,st,P,700,200)
+      +'<div class="note">Eje Y invertido: más arriba = más rápido. Barra vertical = rango de todas las reps de esa sesión. Punteada verde = mejor marca'+(st.ref>0?"; amarilla = referencia del perfil":"")+'; gris = tendencia.</div>'
+      +'<table style="margin-top:8px"><tr><th>Fecha</th><th style="text-align:left">Fase / sesión</th><th>Reps</th><th>Mejor</th><th>Media</th><th>Peor</th><th>Δ ant.</th></tr>';
+    D.sessions.forEach(function(s,i){
+      var prev=i>0?D.sessions[i-1].best:null,dd=prev!==null?s.best-prev:null;
+      d+='<tr><td>'+esc(s.label)+(i===st.pbIdx?" ★":"")+'</td><td style="text-align:left;font-family:inherit;color:#777">'+esc(_pgPhase(s))+'</td><td>'+s.n+'</td><td>'+_pgFmt(s.best)+'</td><td class="mut">'+_pgFmt(s.avg)+'</td><td class="mut">'+_pgFmt(s.worst)+'</td>'
+        +'<td class="'+(dd===null?"mut":dd<0?"good":dd>0?"bad":"mut")+'">'+(dd===null?"—":_pgSigned(dd))+'</td></tr>';
+    });
+    d+='</table>';
+    if(st.fatigue!==null)d+='<div class="note">Caída intra-sesión media: '+_pgPct(st.fatigue)+' (segunda mitad de las reps frente a la primera, en sesiones con 3+ reps).</div>';
+    d+='</div>';
+  });
+
+  if(single.length){
+    d+='<h2>Distancias con un solo registro</h2><div>';
+    single.forEach(function(k){d+='<span class="tag">'+esc(k)+' — '+_pgFmt(ST[k].pb)+'</span>';});
+    d+='</div>';
+  }
+  d+='<div class="note" style="margin-top:20px;border-top:1px solid #ddd;padding-top:8px">Todos los valores provienen de los tiempos guardados en este dispositivo. No se aplica ninguna corrección ni estimación externa.</div>';
+  d+='</body></html>';
+
+  var w=window.open("","_blank");
+  if(!w){alert("El navegador bloqueó la ventana emergente. Permití las ventanas emergentes para generar el reporte.");return;}
+  w.document.open();w.document.write(d);w.document.close();
 }
 function renderHistCalendar(h){
   // Group sessions by day
