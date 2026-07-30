@@ -1839,7 +1839,7 @@ function stopBlock(s){
 }
 function nextBlock(s){
   var b=curBlock(s);
-  if(b&&b.completedReps&&b.completedReps.length>0)s.doneBlocks.push({name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
+  if(b&&b.completedReps&&b.completedReps.length>0)s.doneBlocks.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
   s.curBlock++;s.curRep=0;s.state="idle";s.phase="idle";
   var nb=curBlock(s);
   if(!nb){s.state="stopped";s.phase="done";}
@@ -1886,7 +1886,10 @@ function prevBlock(s){
   var prevB=s.blocks[s.curBlock];
   if(prevB){
     prevB.completedReps=[];
-    s.doneBlocks=s.doneBlocks.filter(function(d){return !(d.name===prevB.name&&d.distance===prevB.distance);});
+    s.doneBlocks=s.doneBlocks.filter(function(d){
+      if(d.bid&&prevB.id)return d.bid!==prevB.id;
+      return !(d.name===prevB.name&&d.distance===prevB.distance);
+    });
   }
   s.curRep=0;s.state="idle";s.phase="idle";s.repStart=0;s.restStart=0;s.repElapsed=0;s.restElapsed=0;s.curSplits=[];s.curSplits=[];
   stopLoopIfIdle();updateMini(s);if(s.id===selId)renderMP(s);updateGlobalBtns();
@@ -1894,14 +1897,14 @@ function prevBlock(s){
 function finishSw(s){
   // Collect current block
   var b=curBlock(s);
-  if(b&&!b.isTransition&&b.completedReps&&b.completedReps.length>0)
-    s.doneBlocks.push({name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
+  if(b&&!b.isTransition&&b.completedReps&&b.completedReps.length>0&&!s.doneBlocks.some(function(d){return d.bid&&d.bid===b.id;}))
+    s.doneBlocks.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
   // Collect any other blocks that have reps but aren't in doneBlocks yet
   if(s.blocks){
     s.blocks.forEach(function(bl,bi){
       if(!bl.isTransition&&bi!==s.curBlock&&bl.completedReps&&bl.completedReps.length>0){
-        var already=s.doneBlocks.some(function(d){return d.name===bl.name&&d.distance===bl.distance;});
-        if(!already)s.doneBlocks.push({name:bl.name,type:bl.type,distance:bl.distance,intensity:bl.intensity,targetMs:bl.targetMs,reps:bl.completedReps.slice()});
+        var already=s.doneBlocks.some(function(d){return d.bid&&d.bid===bl.id;});
+        if(!already)s.doneBlocks.push({bid:bl.id,name:bl.name,type:bl.type,distance:bl.distance,intensity:bl.intensity,targetMs:bl.targetMs,reps:bl.completedReps.slice()});
       }
     });
   }
@@ -2265,7 +2268,7 @@ function updateSaveBar(){}
 document.getElementById("btn-xlsx").addEventListener("click",function(){
   var s=swimmers.find(function(x){return x.id===selId;});if(!s)return;
   var ev=document.getElementById("exp-event");if(ev)s.savedEvent=ev.value;
-  var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length)all.push({name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
+  var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length&&!all.some(function(d){return d.bid&&d.bid===b.id;}))all.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
   if(!all.length){alert("Sin datos.");return;}
   if(typeof XLSX==="undefined"){alert("Excel no disponible.");return;}
   var wb=XLSX.utils.book_new();
@@ -2308,14 +2311,14 @@ document.getElementById("btn-xlsx").addEventListener("click",function(){
 document.getElementById("btn-sav").addEventListener("click",function(){
   var s=swimmers.find(function(x){return x.id===selId;});if(!s)return;
   var ev=document.getElementById("exp-event");if(ev)s.savedEvent=ev.value;
-  var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length)all.push({name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
+  var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length&&!all.some(function(d){return d.bid&&d.bid===b.id;}))all.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
   var h=getHist();h.unshift({id:Date.now(),date:new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),swimmers:[{name:s.name,event:s.savedEvent||"",blocks:all}]});
   saveHist(h);updateHistTab(h.length);document.getElementById("saved-ok").style.display="block";document.getElementById("btn-sav").disabled=true;
 });
 document.getElementById("btn-saveall").addEventListener("click",function(){
   var active=swimmers.filter(function(s){return s.state==="stopped";});if(!active.length)return;
   var h=getHist();
-  var swData=active.map(function(s){var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length)all.push({name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});return{name:s.name,event:s.savedEvent||"",blocks:all};});
+  var swData=active.map(function(s){var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length&&!all.some(function(d){return d.bid&&d.bid===b.id;}))all.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});return{name:s.name,event:s.savedEvent||"",blocks:all};});
   h.unshift({id:Date.now(),date:new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),swimmers:swData});
   saveHist(h);updateHistTab(h.length);
   document.getElementById("saveall-bar").innerHTML='<span style="font-size:12px;color:var(--gt);padding:4px 0">Guardado: '+active.map(function(s){return s.name;}).join(", ")+'</span>';
@@ -2821,19 +2824,20 @@ function buildPDFHTML(swimmersData, coachNote){
   swimmersData.forEach(function(s,si){
     // Collect ALL blocks from the entire session
     var allBlocks=[];
+    function pushBlockOnce(bl,bid){
+      if(bid&&allBlocks.some(function(x){return x.bid&&x.bid===bid;}))return;
+      allBlocks.push(bl);
+    }
     // First collect all doneBlocks
-    s.doneBlocks.forEach(function(bl){allBlocks.push(bl);});
-    // Then add current block if it has reps
-    var curB=s.blocks&&s.blocks[s.curBlock];
-    if(curB&&curB.completedReps&&curB.completedReps.length)
-      allBlocks.push({name:curB.name,type:curB.type,distance:curB.distance,
-        intensity:curB.intensity,targetMs:curB.targetMs,reps:curB.completedReps.slice()});
-    // Also check remaining blocks for any completed reps
+    s.doneBlocks.forEach(function(bl){pushBlockOnce(bl,bl.bid);});
+    // Then add any planned block that has reps but wasn't closed yet (current or later)
     if(s.blocks){
       s.blocks.forEach(function(bl,bi){
-        if(bi>s.curBlock&&bl.completedReps&&bl.completedReps.length)
-          allBlocks.push({name:bl.name,type:bl.type,distance:bl.distance,
-            intensity:bl.intensity,targetMs:bl.targetMs,reps:bl.completedReps.slice()});
+        if(bl.isTransition)return;
+        if(bi<s.curBlock)return;
+        if(!bl.completedReps||!bl.completedReps.length)return;
+        pushBlockOnce({bid:bl.id,name:bl.name,type:bl.type,distance:bl.distance,
+          intensity:bl.intensity,targetMs:bl.targetMs,reps:bl.completedReps.slice()},bl.id);
       });
     }
     if(!allBlocks.length)return;
@@ -2899,10 +2903,30 @@ function buildPDFHTML(swimmersData, coachNote){
     // DETAIL PER BLOCK — plan vs real
     // Get all planned blocks from swimmer's original plan
     var plannedBlocks=s.blocks?s.blocks.filter(function(b){return!b.isTransition;}):[];
+    // Emparejamiento 1 a 1 entre bloques planificados y bloques ejecutados.
+    // Paso 1: por id único (evita que 3 series iguales muestren los mismos tiempos).
+    // Paso 2 (datos antiguos sin id): por nombre+distancia, en orden y sin reutilizar.
+    var doneUsed=new Array(allBlocks.length);
+    var doneByPlanned=new Array(plannedBlocks.length);
+    plannedBlocks.forEach(function(pb,pi){
+      if(!pb.id)return;
+      for(var i=0;i<allBlocks.length;i++){
+        if(!doneUsed[i]&&allBlocks[i].bid&&allBlocks[i].bid===pb.id){
+          doneUsed[i]=true;doneByPlanned[pi]=allBlocks[i];return;
+        }
+      }
+    });
+    plannedBlocks.forEach(function(pb,pi){
+      if(doneByPlanned[pi])return;
+      for(var i=0;i<allBlocks.length;i++){
+        if(!doneUsed[i]&&!allBlocks[i].bid&&allBlocks[i].name===pb.name&&allBlocks[i].distance===pb.distance){
+          doneUsed[i]=true;doneByPlanned[pi]=allBlocks[i];return;
+        }
+      }
+    });
     // Match planned blocks with completed data
-    plannedBlocks.forEach(function(pb){
-      // Find matching done block
-      var doneBlock=allBlocks.find(function(ab){return ab.name===pb.name&&ab.distance===pb.distance;});
+    plannedBlocks.forEach(function(pb,pbIdx){
+      var doneBlock=doneByPlanned[pbIdx]||null;
       var blComp=doneBlock&&doneBlock.reps?doneBlock.reps.filter(function(r){return r.comp;}):[];
       var blAvg=blComp.length?blComp.reduce(function(a,r){return a+parseFloat(r.comp.pctStr);},0)/blComp.length:0;
       var blCls=blAvg>=97?"ok":blAvg>=90?"warn":"bad";
@@ -2959,10 +2983,9 @@ function buildPDFHTML(swimmersData, coachNote){
     });
 
     // If there are blocks with data that weren't in the plan (edge case)
-    allBlocks.forEach(function(bl){
+    allBlocks.forEach(function(bl,blIdx){
       if(!bl.reps||!bl.reps.length)return;
-      var alreadyShown=plannedBlocks.some(function(pb){return pb.name===bl.name&&pb.distance===bl.distance;});
-      if(alreadyShown)return;
+      if(doneUsed[blIdx])return;
       var blComp=bl.reps.filter(function(r){return r.comp;});
       var blAvg=blComp.length?blComp.reduce(function(a,r){return a+parseFloat(r.comp.pctStr);},0)/blComp.length:0;
       var blCls=blAvg>=97?"ok":blAvg>=90?"warn":"bad";
@@ -3026,8 +3049,9 @@ function exportSessionXLSX(swimmersData,customDate){
     if(s.blocks){
       s.blocks.forEach(function(bl,bi){
         if(!bl.isTransition&&bl.completedReps&&bl.completedReps.length>0){
-          var already=s.doneBlocks.find(function(d){return d.name===bl.name&&d.distance===bl.distance;});
-          if(!already)allBlocks.push({name:bl.name,type:bl.type,distance:bl.distance,intensity:bl.intensity,targetMs:bl.targetMs,reps:bl.completedReps.slice()});
+          var already=bl.id?allBlocks.some(function(d){return d.bid&&d.bid===bl.id;})
+                           :allBlocks.some(function(d){return !d.bid&&d.name===bl.name&&d.distance===bl.distance;});
+          if(!already)allBlocks.push({bid:bl.id,name:bl.name,type:bl.type,distance:bl.distance,intensity:bl.intensity,targetMs:bl.targetMs,reps:bl.completedReps.slice()});
         }
       });
     }
@@ -4694,20 +4718,20 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
 (function(){
   if(!("serviceWorker" in navigator)) return;
   var swCode = [
-    "const CACHE="wtimer-v2";",
+    "const CACHE='wtimer-v2';",
     "const SELF_URL=self.location.href;",
-    "self.addEventListener("install",function(e){",
+    "self.addEventListener('install',function(e){",
     "  e.waitUntil(caches.open(CACHE).then(function(c){return c.add(SELF_URL);}));",
     "  self.skipWaiting();",
     "});",
-    "self.addEventListener("activate",function(e){",
+    "self.addEventListener('activate',function(e){",
     "  e.waitUntil(caches.keys().then(function(keys){",
     "    return Promise.all(keys.filter(function(k){return k!==CACHE;}).map(function(k){return caches.delete(k);}));",
     "  }));",
     "  self.clients.claim();",
     "});",
-    "self.addEventListener("fetch",function(e){",
-    "  if(e.request.mode==="navigate"){",
+    "self.addEventListener('fetch',function(e){",
+    "  if(e.request.mode==='navigate'){",
     "    e.respondWith(fetch(e.request).then(function(r){",
     "      var cl=r.clone();",
     "      caches.open(CACHE).then(function(c){c.put(e.request,cl);});",
@@ -4766,9 +4790,9 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     bannerShown=true;
     var b=document.createElement("div");
     b.style.cssText="position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#0d1f35;border-top:1px solid rgba(76,217,123,0.4);padding:14px 16px;display:flex;align-items:center;gap:12px;font-family:-apple-system,sans-serif;animation:slideUp 0.35s ease-out";
-    b.innerHTML="<div style="flex:1"><div style="color:#f0f0f0;font-size:14px;font-weight:600;margin-bottom:2px">Instalar W·Timer</div><div style="color:#888;font-size:12px">Funciona offline · Sin internet</div></div>"
-      +"<button id="pwa-i" style="background:#1a9e4a;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">Instalar</button>"
-      +"<button id="pwa-x" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;padding:0 4px;line-height:1">×</button>";
+    b.innerHTML="<div style='flex:1'><div style='color:#f0f0f0;font-size:14px;font-weight:600;margin-bottom:2px'>Instalar W·Timer</div><div style='color:#888;font-size:12px'>Funciona offline · Sin internet</div></div>"
+      +"<button id='pwa-i' style='background:#1a9e4a;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit'>Instalar</button>"
+      +"<button id='pwa-x' style='background:none;border:none;color:#888;font-size:22px;cursor:pointer;padding:0 4px;line-height:1'>×</button>";
     document.body.appendChild(b);
     document.getElementById("pwa-i").addEventListener("click",function(){
       b.remove();if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(function(){deferredPrompt=null;});}
@@ -4785,9 +4809,9 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       bannerShown=true;
       var b=document.createElement("div");
       b.style.cssText="position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#0d1f35;border-top:1px solid rgba(76,217,123,0.4);padding:16px;font-family:-apple-system,sans-serif;animation:slideUp 0.35s ease-out";
-      b.innerHTML="<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px"><div style="color:#f0f0f0;font-size:14px;font-weight:600">Instalar W·Timer en tu dispositivo</div><button id="pwa-x" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;padding:0;line-height:1">×</button></div>"
-        +"<div style="color:#aaa;font-size:13px;line-height:1.7">1. Tocá <strong style="color:#5aaff0">Compartir</strong> ⏙ en Safari<br>2. Elegí <strong style="color:#5aaff0">“Agregar a pantalla de inicio”</strong></div>"
-        +"<div style="margin-top:10px;height:3px;background:linear-gradient(90deg,#1a9e4a,#1a6fb5);border-radius:2px"></div>";
+      b.innerHTML="<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px'><div style='color:#f0f0f0;font-size:14px;font-weight:600'>Instalar W·Timer en tu dispositivo</div><button id='pwa-x' style='background:none;border:none;color:#888;font-size:22px;cursor:pointer;padding:0;line-height:1'>×</button></div>"
+        +"<div style='color:#aaa;font-size:13px;line-height:1.7'>1. Tocá <strong style='color:#5aaff0'>Compartir</strong> ⏙ en Safari<br>2. Elegí <strong style='color:#5aaff0'>“Agregar a pantalla de inicio”</strong></div>"
+        +"<div style='margin-top:10px;height:3px;background:linear-gradient(90deg,#1a9e4a,#1a6fb5);border-radius:2px'></div>";
       document.body.appendChild(b);
       document.getElementById("pwa-x").addEventListener("click",function(){b.remove();});
     },3000);
