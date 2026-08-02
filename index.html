@@ -203,12 +203,12 @@ body{display:flex;flex-direction:column;}
 .reps-hdr span:nth-child(5){width:72px;text-align:right;color:var(--bt);}
 .rep-row{display:flex;align-items:baseline;padding:5px 0;border-bottom:.5px solid var(--b1);}
 /* PARCIALES */
-.mp-splits{display:none;flex-wrap:wrap;gap:5px;justify-content:center;padding:4px 14px 2px;}
-.split-chip{font-family:var(--mono);font-size:11px;color:var(--muted);background:rgba(26,111,181,.12);border:.5px solid rgba(26,111,181,.35);border-radius:6px;padding:3px 7px;}
+.mp-splits{display:none;flex-wrap:wrap;gap:7px;justify-content:center;padding:6px 14px 4px;}
+.split-chip{font-family:var(--mono);font-size:15px;color:var(--text);background:rgba(26,111,181,.12);border:.5px solid rgba(26,111,181,.35);border-radius:7px;padding:5px 10px;line-height:1.35;}
 .split-chip b{color:var(--bt);font-weight:600;}
 .split-chip i{color:var(--gt);font-style:normal;}
-.split-sub{display:flex;flex-wrap:wrap;gap:4px;padding:2px 0 6px 22px;border-bottom:.5px solid var(--b1);}
-.split-sub span{font-family:var(--mono);font-size:10px;color:var(--faint);background:var(--surf3);border-radius:5px;padding:2px 6px;}
+.split-sub{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 8px 22px;border-bottom:.5px solid var(--b1);}
+.split-sub span{font-family:var(--mono);font-size:14px;color:var(--muted);background:var(--surf3);border-radius:6px;padding:4px 9px;line-height:1.35;}
 .split-sub span b{color:var(--bt);font-weight:600;}
 .split-sub span i{color:var(--gt);font-style:normal;}
 .split-chip u,.split-sub span u{text-decoration:none;font-weight:600;}
@@ -1426,6 +1426,23 @@ function _playBufNow(buf){
   });
 }
 
+// Reproduce el pitido y resuelve EN EL INSTANTE en que empieza a sonar
+// (a diferencia de _playBufNow, que resuelve cuando el sonido TERMINA).
+// Deja registrado el instante exacto del pitido en _raceBeepAt.
+function _playBeepAtOnset(buf){
+  return new Promise(function(resolve){
+    if(!_audioCtx || !buf){ _raceBeepAt = performance.now(); resolve(); return; }
+    if(_audioCtx.state === 'suspended'){ _audioCtx.resume(); }
+    var src = _audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_audioCtx.destination);
+    var leadMs = 60;                                   // margen de programación
+    var when   = _audioCtx.currentTime + leadMs/1000;  // arranque programado
+    src.start(when);
+    setTimeout(function(){ _raceBeepAt = performance.now(); resolve(); }, leadMs);
+  });
+}
+
 function _syntheticBeep(){
   if(!_audioCtx) return;
   var t=_audioCtx.currentTime+0.02;
@@ -1443,7 +1460,7 @@ function _syntheticBeep(){
 // Secuencia completa
 function _playRaceSequence(){
   return new Promise(function(resolve){
-    if(!_audioUnlocked || !_audioCtx){ resolve(); return; }
+    if(!_audioUnlocked || !_audioCtx){ _raceBeepAt = performance.now(); resolve(); return; }
     if(_audioCtx.state==='suspended'){ _audioCtx.resume(); }
 
     if(_bufVoice && _bufBeep){
@@ -1452,12 +1469,13 @@ function _playRaceSequence(){
       var voiceDurMs = _bufVoice.duration * 1000;
       var pauseAfterVoice = Math.max(0, _startDelay - voiceDurMs);
       _playBufNow(_bufVoice).then(function(){
-        setTimeout(function(){ _playBufNow(_bufBeep).then(resolve); }, pauseAfterVoice);
+        setTimeout(function(){ _playBeepAtOnset(_bufBeep).then(resolve); }, pauseAfterVoice);
       });
     } else {
       console.warn('[Audio] buffers no listos, usando tono sintético');
       _syntheticBeep();
-      setTimeout(resolve, 700);
+      // el tono sintético arranca en currentTime+0.02 → resolvemos ahí, no 700 ms después
+      setTimeout(function(){ _raceBeepAt = performance.now(); resolve(); }, 20);
     }
   });
 }
@@ -1630,10 +1648,16 @@ function _renderCalUI(){
 }
 
 var _raceStartPending = false;
-var _raceStartManualMode = false; // false = auto (actual), true = manual
+var _raceStartManualMode = (function(){
+  try{ return localStorage.getItem('wt-race-mode') === 'manual'; }catch(e){ return false; }
+})(); // false = auto, true = manual
+var _raceBeepAt      = 0;     // performance.now() del instante en que ARRANCA el pitido
+var _manualWaitRaf   = null;  // loop del contador "desde el pitido"
+var _nextRepManual   = false; // marca la próxima rep como iniciada a mano
 
 function setRaceStartMode(manual){
-  _raceStartManualMode = manual;
+  _raceStartManualMode = !!manual;
+  try{ localStorage.setItem('wt-race-mode', manual ? 'manual' : 'auto'); }catch(e){}
   var btnAuto = document.getElementById('race-mode-auto');
   var btnManual = document.getElementById('race-mode-manual');
   if(btnAuto){
@@ -1647,6 +1671,11 @@ function setRaceStartMode(manual){
     btnManual.style.background = manual ? 'var(--ad)' : 'var(--surf2)';
   }
 }
+
+// Reflejar el modo guardado (Auto / Manual) al cargar la página
+document.addEventListener('DOMContentLoaded', function(){
+  setRaceStartMode(_raceStartManualMode);
+});
 
 function _raceUICountdown(s, phase){
   var btns = document.getElementById("mp-btns");
@@ -1665,47 +1694,103 @@ function _raceUICountdown(s, phase){
   }
 }
 
-// UI después del pitido en modo MANUAL: muestra botón para arrancar el cronómetro
+// Detiene el contador vivo "desde el pitido"
+function _stopManualWait(){
+  if(_manualWaitRaf){ cancelAnimationFrame(_manualWaitRaf); _manualWaitRaf=null; }
+}
+
+// Arranque MANUAL del cronómetro (el entrenador aprieta el botón verde).
+// Se marca la rep como manual para NO restarle después la latencia Bluetooth:
+// ese offset sólo corrige el arranque automático en el pitido de la tablet.
+function startRepManual(s){
+  _stopManualWait();
+  // Diferencia entre el pitido y el momento en que el entrenador aprieta el botón
+  s.pendingStartLag = (_raceBeepAt>0) ? Math.round(performance.now()-_raceBeepAt) : null;
+  _nextRepManual = true;
+  startRep(s);
+}
+
+// Cancela la espera manual (salida nula / falsa partida) y vuelve al estado previo
+function cancelManualWait(s){
+  _stopManualWait();
+  _raceBeepAt = 0;
+  updateMini(s);
+  if(s.id===selId) renderMP(s);
+}
+
+// UI después del pitido en modo MANUAL:
+// botón VERDE (pulsante) para arrancar el cronómetro + contador en vivo desde el pitido
 function _raceUIWaitManual(s){
   var btns = document.getElementById("mp-btns");
   if(btns){
     btns.innerHTML="";
     var cb=document.createElement("button");
     cb.className="bb start";
-    cb.style.cssText="flex:1;font-size:16px;font-weight:700;animation:pulse-green 0.6s ease-in-out infinite alternate;";
-    cb.textContent="▶ Iniciar cronómetro";
-    cb.addEventListener("click",function(){ startRep(s); });
+    cb.style.cssText="flex:1;font-size:16px;font-weight:700;line-height:1.25;animation:pulse-green 0.6s ease-in-out infinite alternate;";
+    cb.innerHTML='▶ Iniciar cronómetro'
+      +'<br><span id="_race-manual-delta" style="font-size:12px;font-weight:500;opacity:.9;font-family:var(--mono);">+0.00 s desde el pitido</span>';
+    cb.addEventListener("click",function(){ startRepManual(s); });
     btns.appendChild(cb);
+
+    var xb=document.createElement("button");
+    xb.className="bb stop";
+    xb.textContent="✕";
+    xb.title="Cancelar la partida (salida nula)";
+    xb.style.cssText="max-width:70px;font-size:15px;";
+    xb.addEventListener("click",function(){ cancelManualWait(s); });
+    btns.appendChild(xb);
   }
+
   var smb = document.getElementById("smb-"+s.id);
   if(smb){
-    smb.innerHTML='<button class="mb2 play" data-id="'+s.id+'" data-ac="start" title="Iniciar cronómetro manualmente" style="font-size:14px;font-weight:700;">▶</button>';
+    smb.innerHTML='<button class="mb2 play" data-id="'+s.id+'" data-ac="start-manual" title="Iniciar cronómetro manualmente" style="font-size:14px;font-weight:700;animation:pulse-green 0.6s ease-in-out infinite alternate;">▶</button>';
     smb.querySelectorAll("[data-ac]").forEach(function(btn){
       btn.addEventListener("click",function(e){
         e.stopPropagation();
         var sw=swimmers.find(function(x){return x.id===btn.dataset.id;});
-        if(sw) startRep(sw);
+        if(sw) startRepManual(sw);
       });
     });
   }
+
+  // Contador vivo. Antes del pitido muestra el estado del audio;
+  // desde el pitido cuenta el tiempo hasta que se aprieta el verde.
+  _stopManualWait();
+  (function tick(){
+    var el=document.getElementById("_race-manual-delta");
+    if(!el){ _manualWaitRaf=null; return; }
+    el.textContent = _raceBeepAt>0
+      ? "+" + ((performance.now()-_raceBeepAt)/1000).toFixed(2) + " s desde el pitido"
+      : "🎙 On your marks… (audio en curso)";
+    _manualWaitRaf = requestAnimationFrame(tick);
+  })();
 }
 
 function startRepWithRaceStart(s){
   if(_raceStartPending) return;
   _raceStartPending = true;
+  _stopManualWait();
+  _nextRepManual = false;
+  _raceBeepAt = 0;
 
-  _raceUICountdown(s, "warning");
+  if(_raceStartManualMode){
+    // MANUAL: el botón verde queda disponible DESDE YA, mientras suena el audio.
+    // Así se puede arrancar el cronómetro justo cuando el nadador sale del partidor.
+    _raceUIWaitManual(s);
+  } else {
+    _raceUICountdown(s, "warning");
+  }
 
   _playRaceSequence().then(function(){
     // La Promise resuelve exactamente cuando empieza el pitido
     _raceStartPending = false;
     if(_raceStartManualMode){
-      // Audio sonó, pero el cronómetro espera al usuario
-      _raceUIWaitManual(s);
-    } else {
-      _raceUICountdown(s, "beep");
-      startRep(s);
+      // El botón verde ya estaba; el pitido solo arranca el contador (_raceBeepAt).
+      // Si el cronómetro ya se apretó antes, no se toca nada.
+      return;
     }
+    _raceUICountdown(s, "beep");
+    startRep(s);
   });
 }
 
@@ -1757,7 +1842,7 @@ function takeSplit(s){
   if(!s||s.state!=="repping")return;
   var b=curBlock(s);if(!b||b.isTransition)return;
   var t=Math.round(performance.now()-s.repStart);
-  if(blockIsConPartida(b)&&_btOffset>0)t=Math.max(1,t-_btOffset);
+  if(blockIsConPartida(b)&&_btOffset>0&&!s.repManualStart)t=Math.max(1,t-_btOffset);
   if(!s.curSplits)s.curSplits=[];
   if(s.curSplits.length&&t<=s.curSplits[s.curSplits.length-1])return; // evita doble toque
   s.curSplits.push(t);
@@ -1798,6 +1883,9 @@ function updateSplitBtn(s){
 function startRep(s){
   var b=curBlock(s);if(!b)return;
   if(b.isTransition){s.state="transition";s.restStart=performance.now();s.restElapsed=0;updateMini(s);if(s.id===selId)renderMP(s);ensureLoop();return;}
+  s.repManualStart=_nextRepManual; _nextRepManual=false;
+  s.repStartLag = s.repManualStart ? (s.pendingStartLag!=null?s.pendingStartLag:null) : null;
+  s.pendingStartLag=null;
   s.curRep++;s.repStart=performance.now();s.repElapsed=0;s.state="repping";s.curSplits=[];
   updateMini(s);if(s.id===selId)renderMP(s);ensureLoop();updateGlobalBtns();
 }
@@ -1806,9 +1894,10 @@ function endRep(s){
   s.repElapsed=performance.now()-s.repStart;
   // Restar latencia Bluetooth en bloques con partida
   var _repTime=Math.round(s.repElapsed);
-  if(blockIsConPartida(b) && _btOffset>0) _repTime=Math.max(100, _repTime-_btOffset);
+  if(blockIsConPartida(b) && _btOffset>0 && !s.repManualStart) _repTime=Math.max(100, _repTime-_btOffset);
   var comp=calcComp(_repTime,b.targetMs);
-  b.completedReps.push({n:s.curRep,time:_repTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s)});
+  b.completedReps.push({n:s.curRep,time:_repTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s),startLag:(s.repStartLag!=null?s.repStartLag:null)});
+  s.repStartLag=null;
   var sub=document.getElementById("ms-"+s.id);
   if(sub)sub.textContent="R"+s.curRep+" "+fmtS(s.repElapsed)+(comp?" "+comp.pctStr:"");
   if(s.curRep>=b.reps){s.state="stopped";s.phase="block-done";updateMini(s);if(s.id===selId)renderMP(s);updateGlobalBtns();updateSaveBar();return;}
@@ -1834,7 +1923,7 @@ function finishTransition(s){
 }
 function stopBlock(s){
   var b=curBlock(s);
-  if(b&&s.state==="repping"){s.repElapsed=performance.now()-s.repStart;var _sRepTime=Math.round(s.repElapsed);if(blockIsConPartida(b)&&_btOffset>0)_sRepTime=Math.max(100,_sRepTime-_btOffset);var comp=calcComp(_sRepTime,b.targetMs);b.completedReps.push({n:s.curRep,time:_sRepTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s)});}
+  if(b&&s.state==="repping"){s.repElapsed=performance.now()-s.repStart;var _sRepTime=Math.round(s.repElapsed);if(blockIsConPartida(b)&&_btOffset>0&&!s.repManualStart)_sRepTime=Math.max(100,_sRepTime-_btOffset);var comp=calcComp(_sRepTime,b.targetMs);b.completedReps.push({n:s.curRep,time:_sRepTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s),startLag:(s.repStartLag!=null?s.repStartLag:null)});s.repStartLag=null;}
   s.state="stopped";s.phase="block-done";stopLoopIfIdle();updateMini(s);if(s.id===selId)renderMP(s);updateGlobalBtns();updateSaveBar();
 }
 function nextBlock(s){
@@ -2082,7 +2171,7 @@ function renderMP(s){
   if(b&&b.targetMs>0&&!b.isTransition)tgt.innerHTML='Objetivo: <b>'+fmtS(b.targetMs)+'</b>';
   else if(b&&!b.isTransition&&b.intensity>0)tgt.innerHTML='<span style="color:var(--rt)">Sin referencia en Config para '+b.distance+'</span>';
   else tgt.innerHTML="";
-  if(s.state==="repping"){phase.textContent="Rep "+s.curRep+" — en curso";phase.className="mp-phase repping";timeEl.className="mp-time repping";repInfo.textContent=s.curRep+" / "+(b?b.reps:"");}
+  if(s.state==="repping"){phase.textContent="Rep "+s.curRep+" — en curso"+(s.repStartLag!=null?" · reacción +"+(s.repStartLag/1000).toFixed(2)+" s":"");phase.className="mp-phase repping";timeEl.className="mp-time repping";repInfo.textContent=s.curRep+" / "+(b?b.reps:"");}
   else if(s.state==="resting"){
     var b2=curBlock(s);
     var restRef=b2&&b2.restSec>0?" (ref: "+fmtSec(b2.restSec)+")":" ";
@@ -2193,6 +2282,13 @@ function renderRepsList(s){
       +'<span class="rt2">'+fmtS(r.time)
         +'<button class="rep-edit-btn-pencil" title="Editar tiempo" onclick="openRepEditModal(\''+s.id+'\','+r.n+')">✏</button>'
       +'</span>'+diff+pct+rest+'</div>';
+    if(r.startLag!=null){
+      html+='<div class="split-sub">'
+        +'<span><b>Reacción</b> +'+(r.startLag/1000).toFixed(2)+' s</span>'
+        +'<span><b>Tiempo inicio manual</b> '+fmtS(r.time)+'</span>'
+        +'<span><b>Total</b> <i>'+fmtS(r.time+r.startLag)+'</i></span>'
+      +'</div>';
+    }
     var _segs=splitSegments(b,r);
     if(_segs.length){
       html+='<div class="split-sub">';
