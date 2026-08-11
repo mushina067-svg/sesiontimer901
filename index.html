@@ -3431,6 +3431,7 @@ function renderHistList(h){
 
 // ── TABS ─────────────────────────────────────────────────────────
 function showTab(v){
+  try{ sessionStorage.setItem("wt-tab", v); }catch(e){}
   ["swimmers","timer","config","history","templates","gym"].forEach(function(id){
     document.getElementById("view-"+id).className="view"+(v===id?" active":"");
     document.getElementById("tab-"+id).className="tab"+(v===id?" active":"");
@@ -3440,6 +3441,19 @@ function showTab(v){
   if(v==="swimmers")renderCards();
   if(v==="templates")renderTemplateList();
   if(v==="gym")gymRender();
+}
+function currentTab(){
+  var ids=["swimmers","timer","config","history","templates","gym"];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById("view-"+ids[i]);
+    if(el && el.className.indexOf("active")>=0) return ids[i];
+  }
+  return "swimmers";
+}
+function softRefresh(){ try{ showTab(currentTab()); }catch(e){} }
+function restoreTab(){
+  var t=null; try{ t=sessionStorage.getItem("wt-tab"); }catch(e){}
+  if(t && document.getElementById("view-"+t)) showTab(t);
 }
 
 // ── PDF REPORT ───────────────────────────────────────────────────
@@ -5807,7 +5821,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
         status("Subido \u2713 " + rows.length + " bloques" +
                (skipped.length ? " (" + skipped.length + " protegidos)" : "") +
                " \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
-        if(skipped.length) setTimeout(function(){ location.reload(); }, 900);
+        if(skipped.length) softRefresh();
       });
     });
   }
@@ -5835,8 +5849,8 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       applying = false;
       lastPull = Date.now();
       if(changed){
-        status("Datos nuevos de la nube \u2014 recargando\u2026", "var(--gt)");
-        setTimeout(function(){ location.reload(); }, 600);
+        status("Datos nuevos de la nube \u2713 actualizado \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
+        softRefresh();
       }else{
         status("Bajada completa \u2713 sin cambios \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
       }
@@ -6010,7 +6024,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     if(!cfgView || document.getElementById("wt-cloud-body")) return;
     var box = document.createElement("div");
     box.innerHTML =
-      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v12)</span></div>" +
+      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v13)</span></div>" +
       "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
         "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:8px;min-height:14px;'></div>" +
         "<div id='wt-cloud-body'></div>" +
@@ -6020,7 +6034,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
   }
 
   function start(){ mount(); boot(); }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ setTimeout(start, 300); });
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ setTimeout(function(){ try{ restoreTab(); }catch(e){} start(); }, 300); });
   else setTimeout(start, 300);
 })();
 </script>
