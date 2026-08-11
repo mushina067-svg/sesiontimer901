@@ -5705,7 +5705,18 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
   "use strict";
   var CLOUD_KEYS = ["swim-v6","swim-profiles","swim-templates","swim-sessions-draft","wt-bt-offset","wt-race-mode"];
   var LS = window.localStorage;
-  var cfg = { url: LS.getItem("wt-sb-url")||"", key: LS.getItem("wt-sb-key")||"" };
+  function normUrl(u){
+    u = (u||"").trim();
+    if(!u) return "";
+    if(!/^https?:\/\//i.test(u)) u = "https://" + u;
+    var host = "";
+    try { host = new URL(u).hostname; } catch(e){ host = u.replace(/^https?:\/\//i,"").split("/")[0]; }
+    // Si pegaron la URL del panel: supabase.com/dashboard/project/REF
+    var m = u.match(/supabase\.(?:com|co)\/dashboard\/project\/([a-z0-9]{16,})/i);
+    if(m) return "https://" + m[1] + ".supabase.co";
+    return "https://" + host;
+  }
+  var cfg = { url: normUrl(LS.getItem("wt-sb-url")||""), key: (LS.getItem("wt-sb-key")||"").trim() };
   var sb = null, user = null, pushTimer = null, applying = false, lastPull = 0;
 
   function mtimeKey(k){ return "wt-lm-" + k; }
@@ -5844,7 +5855,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
         "<input id='wt-sb-key' style=\""+INP+"\" placeholder='anon public key' value=\""+esc(cfg.key)+"\">" +
         "<button id='wt-sb-save' style=\""+BTN+"width:100%;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Guardar conexi\u00f3n</button>";
       document.getElementById("wt-sb-save").onclick = function(){
-        cfg.url = document.getElementById("wt-sb-url").value.trim().replace(/\/+$/,"");
+        cfg.url = normUrl(document.getElementById("wt-sb-url").value);
         cfg.key = document.getElementById("wt-sb-key").value.trim();
         if(!cfg.url || !cfg.key){ alert("Complet\u00e1 los dos campos."); return; }
         LS.setItem("wt-sb-url", cfg.url); LS.setItem("wt-sb-key", cfg.key);
@@ -5861,26 +5872,55 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
           "<button id='wt-sb-in' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">Entrar</button>" +
           "<button id='wt-sb-up' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Crear cuenta</button>" +
         "</div>" +
-        "<button id='wt-sb-forget' style=\""+BTN+"width:100%;margin-top:8px;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cambiar proyecto</button>";
+        "<div id='wt-auth-result' role='status' aria-live='polite' style='font-size:12px;line-height:1.45;margin-top:9px;min-height:18px;color:var(--faint);'></div>" +
+        "<button type='button' id='wt-sb-forget' style=\""+BTN+"width:100%;margin-top:8px;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cambiar proyecto</button>";
       var mail = function(){ return document.getElementById("wt-sb-mail").value.trim(); };
       var pass = function(){ return document.getElementById("wt-sb-pass").value; };
-      document.getElementById("wt-sb-in").onclick = function(){
-        var c = needClient(); if(!c) return;
-        if(!mail() || !pass()){ status("Complet\u00e1 email y contrase\u00f1a.", "var(--rt)"); return; }
-        status("Entrando\u2026");
-        c.auth.signInWithPassword({ email: mail(), password: pass() }).then(function(r){
-          if(r.error) status("No se pudo entrar: " + r.error.message, "var(--rt)");
-        }).catch(function(e){ status("Error de red: " + (e && e.message || e), "var(--rt)"); });
-      };
-      document.getElementById("wt-sb-up").onclick = function(){
-        var c = needClient(); if(!c) return;
-        if(!mail() || pass().length < 6){ status("Email v\u00e1lido y contrase\u00f1a de 6+ caracteres.", "var(--rt)"); return; }
-        status("Creando cuenta\u2026");
-        c.auth.signUp({ email: mail(), password: pass() }).then(function(r){
-          if(r.error){ status("No se pudo crear: " + r.error.message, "var(--rt)"); return; }
-          if(!r.data.session) status("Revis\u00e1 tu email y confirm\u00e1 la cuenta, despu\u00e9s entr\u00e1.", "var(--at)");
-        }).catch(function(e){ status("Error de red: " + (e && e.message || e), "var(--rt)"); });
-      };
+      function authStatus(msg, color){
+        status(msg, color);
+        var el = document.getElementById("wt-auth-result");
+        if(el){ el.textContent = msg; el.style.color = color || "var(--muted)"; }
+      }
+      function withTimeout(promise){
+        return Promise.race([promise, new Promise(function(_, reject){
+          setTimeout(function(){ reject(new Error("La conexi\u00f3n tard\u00f3 demasiado. Revis\u00e1 la URL, la clave y tu internet.")); }, 15000);
+        })]);
+      }
+      function setBusy(button, busy, text){
+        button.disabled = busy;
+        button.style.opacity = busy ? ".6" : "1";
+        button.textContent = busy ? text : button.getAttribute("data-label");
+      }
+      var inBtn = document.getElementById("wt-sb-in");
+      var upBtn = document.getElementById("wt-sb-up");
+      inBtn.setAttribute("data-label", "Entrar");
+      upBtn.setAttribute("data-label", "Crear cuenta");
+      inBtn.addEventListener("click", function(ev){
+        ev.preventDefault();
+        var c = needClient();
+        if(!c){ authStatus("No se pudo iniciar la conexi\u00f3n. Toc\u00e1 Cambiar proyecto y revis\u00e1 URL y clave.", "var(--rt)"); return; }
+        if(!mail() || !pass()){ authStatus("Complet\u00e1 email y contrase\u00f1a.", "var(--rt)"); return; }
+        setBusy(inBtn, true, "Entrando\u2026"); authStatus("Entrando\u2026");
+        withTimeout(c.auth.signInWithPassword({ email: mail(), password: pass() })).then(function(r){
+          if(r.error) throw r.error;
+          authStatus("Sesi\u00f3n iniciada correctamente.", "var(--gt)");
+        }).catch(function(e){ authStatus("No se pudo entrar: " + (e && e.message || e), "var(--rt)"); })
+          .then(function(){ setBusy(inBtn, false); });
+      });
+      upBtn.addEventListener("click", function(ev){
+        ev.preventDefault();
+        var email = mail(), password = pass();
+        if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || password.length < 6){ authStatus("Ingres\u00e1 un email v\u00e1lido y una contrase\u00f1a de 6+ caracteres.", "var(--rt)"); return; }
+        var c = needClient();
+        if(!c){ authStatus("No se pudo iniciar la conexi\u00f3n. Toc\u00e1 Cambiar proyecto y revis\u00e1 URL y clave.", "var(--rt)"); return; }
+        setBusy(upBtn, true, "Creando\u2026"); authStatus("Creando cuenta\u2026 No cierres esta pantalla.");
+        withTimeout(c.auth.signUp({ email: email, password: password, options: { emailRedirectTo: location.origin + location.pathname } })).then(function(r){
+          if(r.error) throw r.error;
+          if(r.data && r.data.session) authStatus("Cuenta creada y conectada correctamente \u2713", "var(--gt)");
+          else authStatus("Cuenta creada. Revis\u00e1 tu email y toc\u00e1 el enlace de confirmaci\u00f3n; despu\u00e9s volv\u00e9 y toc\u00e1 Entrar.", "var(--at)");
+        }).catch(function(e){ authStatus("No se pudo crear: " + (e && e.message || e), "var(--rt)"); })
+          .then(function(){ setBusy(upBtn, false); });
+      });
       document.getElementById("wt-sb-forget").onclick = function(){
         if(!confirm("\u00bfBorrar la conexi\u00f3n guardada en este dispositivo? Tus datos en la nube no se tocan.")) return;
         LS.removeItem("wt-sb-url"); LS.removeItem("wt-sb-key");
@@ -5915,7 +5955,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     if(!cfgView || document.getElementById("wt-cloud-body")) return;
     var box = document.createElement("div");
     box.innerHTML =
-      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v7)</span></div>" +
+      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v9)</span></div>" +
       "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
         "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:8px;min-height:14px;'></div>" +
         "<div id='wt-cloud-body'></div>" +
