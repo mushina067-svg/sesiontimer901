@@ -5761,23 +5761,54 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     pushTimer = setTimeout(function(){ push(); }, 1500);
   }
 
+  function isEmptyVal(v){
+    if(v === null || v === undefined) return true;
+    var t = String(v).trim();
+    return t === "" || t === "[]" || t === "{}" || t === "null" || t === "0";
+  }
+
   function push(silent){
     var c = client();
     if(!c || !user) return Promise.resolve();
-    var rows = CLOUD_KEYS.map(function(k){
-      return {
-        user_id: user.id,
-        key: k,
-        value: LS.getItem(k),
-        updated_at: new Date(localMtime(k) || Date.now()).toISOString()
-      };
-    }).filter(function(r){ return r.value !== null; });
-    if(!rows.length) return Promise.resolve();
     if(!silent) status("Subiendo\u2026");
-    return c.from("wt_state").upsert(rows, { onConflict: "user_id,key" }).then(function(res){
-      if(res.error){ status("Error al subir: " + res.error.message, "var(--rt)"); return; }
-      LS.setItem("wt-sb-lastsync", Date.now().toString());
-      status("Subido \u2713 " + rows.length + " bloques \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
+    // Protecci\u00f3n: nunca pisar en la nube un bloque con contenido usando uno vac\u00edo de este equipo
+    return c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id).then(function(pre){
+      var remote = {};
+      if(!pre.error) (pre.data||[]).forEach(function(r){ remote[r.key] = r; });
+      var skipped = [];
+      var rows = [];
+      applying = true;
+      CLOUD_KEYS.forEach(function(k){
+        var local = LS.getItem(k);
+        if(local === null) return;
+        var r = remote[k];
+        if(r && isEmptyVal(local) && !isEmptyVal(r.value)){
+          // adoptamos lo de la nube en vez de borrarlo
+          _set(k, r.value);
+          _set(mtimeKey(k), new Date(r.updated_at).getTime().toString());
+          skipped.push(k);
+          return;
+        }
+        rows.push({
+          user_id: user.id,
+          key: k,
+          value: local,
+          updated_at: new Date(localMtime(k) || Date.now()).toISOString()
+        });
+      });
+      applying = false;
+      if(!rows.length){
+        status("Nada para subir" + (skipped.length ? " \u00b7 " + skipped.length + " bloques protegidos" : ""), "var(--gt)");
+        return;
+      }
+      return c.from("wt_state").upsert(rows, { onConflict: "user_id,key" }).then(function(res){
+        if(res.error){ status("Error al subir: " + res.error.message, "var(--rt)"); return; }
+        LS.setItem("wt-sb-lastsync", Date.now().toString());
+        status("Subido \u2713 " + rows.length + " bloques" +
+               (skipped.length ? " (" + skipped.length + " protegidos)" : "") +
+               " \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
+        if(skipped.length) setTimeout(function(){ location.reload(); }, 900);
+      });
     });
   }
 
@@ -5792,7 +5823,10 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       (res.data||[]).forEach(function(row){
         if(CLOUD_KEYS.indexOf(row.key) < 0) return;
         var remoteT = new Date(row.updated_at).getTime();
-        if(remoteT > localMtime(row.key) && row.value !== LS.getItem(row.key)){
+        var localVal = LS.getItem(row.key);
+        var winsByTime = remoteT > localMtime(row.key);
+        var winsByContent = isEmptyVal(localVal) && !isEmptyVal(row.value);
+        if((winsByTime || winsByContent) && row.value !== localVal){
           _set(row.key, row.value);
           _set(mtimeKey(row.key), remoteT.toString());
           changed = true;
@@ -5976,7 +6010,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     if(!cfgView || document.getElementById("wt-cloud-body")) return;
     var box = document.createElement("div");
     box.innerHTML =
-      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v11)</span></div>" +
+      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v12)</span></div>" +
       "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
         "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:8px;min-height:14px;'></div>" +
         "<div id='wt-cloud-body'></div>" +
