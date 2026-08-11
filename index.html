@@ -5734,6 +5734,16 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     return sb;
   }
 
+  function needClient(){
+    var c = client();
+    if(!c){
+      if(!window.supabase || !window.supabase.createClient)
+        status("No se pudo cargar la librer\u00eda de la nube. Conectate a internet y record\u00e1 la p\u00e1gina.", "var(--rt)");
+      else status("Falta configurar la conexi\u00f3n.", "var(--rt)");
+    }
+    return c;
+  }
+
   function schedulePush(){
     if(!user) return;
     clearTimeout(pushTimer);
@@ -5855,17 +5865,21 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       var mail = function(){ return document.getElementById("wt-sb-mail").value.trim(); };
       var pass = function(){ return document.getElementById("wt-sb-pass").value; };
       document.getElementById("wt-sb-in").onclick = function(){
+        var c = needClient(); if(!c) return;
+        if(!mail() || !pass()){ status("Complet\u00e1 email y contrase\u00f1a.", "var(--rt)"); return; }
         status("Entrando\u2026");
-        client().auth.signInWithPassword({ email: mail(), password: pass() }).then(function(r){
+        c.auth.signInWithPassword({ email: mail(), password: pass() }).then(function(r){
           if(r.error) status("No se pudo entrar: " + r.error.message, "var(--rt)");
-        });
+        }).catch(function(e){ status("Error de red: " + (e && e.message || e), "var(--rt)"); });
       };
       document.getElementById("wt-sb-up").onclick = function(){
+        var c = needClient(); if(!c) return;
+        if(!mail() || pass().length < 6){ status("Email v\u00e1lido y contrase\u00f1a de 6+ caracteres.", "var(--rt)"); return; }
         status("Creando cuenta\u2026");
-        client().auth.signUp({ email: mail(), password: pass() }).then(function(r){
+        c.auth.signUp({ email: mail(), password: pass() }).then(function(r){
           if(r.error){ status("No se pudo crear: " + r.error.message, "var(--rt)"); return; }
           if(!r.data.session) status("Revis\u00e1 tu email y confirm\u00e1 la cuenta, despu\u00e9s entr\u00e1.", "var(--at)");
-        });
+        }).catch(function(e){ status("Error de red: " + (e && e.message || e), "var(--rt)"); });
       };
       document.getElementById("wt-sb-forget").onclick = function(){
         if(!confirm("\u00bfBorrar la conexi\u00f3n guardada en este dispositivo? Tus datos en la nube no se tocan.")) return;
@@ -5876,7 +5890,6 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     }
     host.innerHTML =
       "<div style='font-size:12px;color:var(--gt);margin-bottom:4px;'>\u2713 Conectado como " + esc(user.email||"") + "</div>" +
-      "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:10px;'>Todo se guarda autom\u00e1ticamente en la nube.</div>" +
       "<div style='display:flex;gap:8px;margin-bottom:8px;'>" +
         "<button id='wt-sb-push' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">\u2191 Subir ahora</button>" +
         "<button id='wt-sb-pullb' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">\u2193 Bajar ahora</button>" +
@@ -5892,7 +5905,8 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     };
     document.getElementById("wt-sb-out").onclick = function(){
       if(!confirm("\u00bfCerrar sesi\u00f3n? Los datos siguen en este dispositivo y en la nube.")) return;
-      client().auth.signOut().then(function(){ user = null; renderCloud(); });
+      var c = needClient(); if(!c) return;
+      c.auth.signOut().then(function(){ user = null; renderCloud(); });
     };
   }
 
@@ -5903,6 +5917,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     box.innerHTML =
       "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos</div>" +
       "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
+        "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:8px;min-height:14px;'></div>" +
         "<div id='wt-cloud-body'></div>" +
       "</div>";
     cfgView.appendChild(box);
