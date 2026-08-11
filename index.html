@@ -9,25 +9,9 @@
 <meta name="theme-color" content="#0d1f35">
 <meta name="description" content="Timer de natación Wottrich — cronómetro profesional para sesiones de entrenamiento">
 <title>Wottrich · Timer</title>
-<script>
-(function(){
-  try{
-    var c=document.createElement("canvas");c.width=180;c.height=180;
-    var ctx=c.getContext("2d");
-    var r=40;ctx.beginPath();ctx.moveTo(r,0);ctx.lineTo(180-r,0);
-    ctx.quadraticCurveTo(180,0,180,r);ctx.lineTo(180,180-r);
-    ctx.quadraticCurveTo(180,180,180-r,180);ctx.lineTo(r,180);
-    ctx.quadraticCurveTo(0,180,0,180-r);ctx.lineTo(0,r);
-    ctx.quadraticCurveTo(0,0,r,0);ctx.closePath();
-    ctx.fillStyle="#0d1f35";ctx.fill();
-    ctx.fillStyle="#4cd97b";ctx.font="bold 110px -apple-system,sans-serif";
-    ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("W",90,95);
-    var link=document.createElement("link");
-    link.rel="apple-touch-icon";link.href=c.toDataURL("image/png");
-    document.head.appendChild(link);
-  }catch(e){}
-})();
-</script>
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png" type="image/png">
 <style>
 :root{
   --bg:#0a0a0a;--surf:#161616;--surf2:#1f1f1f;--surf3:#252525;
@@ -48,7 +32,7 @@ body{display:flex;flex-direction:column;}
 .hdr-title{font-size:15px;font-weight:600;color:var(--text);}
 .hdr-sub{font-size:10px;color:var(--muted);}
 .tabs{display:flex;border-bottom:.5px solid var(--b1);background:var(--surf);flex-shrink:0;}
-.tab{flex:1;padding:11px 0;font-size:12px;text-align:center;cursor:pointer;background:none;border:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-.5px;font-family:inherit;}
+.tab{flex:1;padding:11px 0;min-height:44px;font-size:12px;text-align:center;cursor:pointer;background:none;border:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-.5px;font-family:inherit;}
 .tab.active{color:var(--text);border-bottom-color:var(--gt);}
 .view{flex:1;overflow:hidden;display:none;}
 .view.active{display:flex;flex-direction:column;}
@@ -121,7 +105,7 @@ body{display:flex;flex-direction:column;}
 /* LEFT PANEL TIMER */
 .lp{width:240px;flex-shrink:0;border-right:.5px solid var(--b1);display:flex;flex-direction:column;background:var(--surf);}
 .lt{padding:8px;border-bottom:.5px solid var(--b1);}
-.btn-g{width:100%;padding:9px 0;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;text-align:center;margin-bottom:4px;}
+.btn-g{width:100%;padding:9px 0;min-height:44px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;text-align:center;margin-bottom:4px;}
 .btn-g:active{transform:scale(.97);}
 .btn-g:disabled{opacity:.3;cursor:default;}
 .btn-g.go{background:var(--green);border-color:transparent;color:#fff;font-weight:500;}
@@ -159,7 +143,7 @@ body{display:flex;flex-direction:column;}
 .mp-empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:14px;}
 .mp-inner{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .mp-nav{display:flex;align-items:center;gap:6px;padding:10px 14px 2px;flex-shrink:0;}
-.btn-nav{background:none;border:.5px solid var(--b2);border-radius:var(--rs);color:var(--muted);font-size:20px;cursor:pointer;padding:2px 12px;line-height:1.4;}
+.btn-nav{background:none;border:.5px solid var(--b2);border-radius:var(--rs);color:var(--muted);font-size:20px;cursor:pointer;padding:2px 14px;min-height:44px;min-width:48px;line-height:1.4;}
 .btn-nav:active{transform:scale(.9);}
 .mp-name{flex:1;font-size:22px;font-weight:500;color:var(--text);text-transform:uppercase;text-align:center;}
 .mp-block{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;text-align:center;padding:0 14px;flex-shrink:0;}
@@ -185,7 +169,7 @@ body{display:flex;flex-direction:column;}
 .bb.next-block{background:var(--amber);color:#0a0a0a;font-weight:600;}
 .bb.done-st{background:var(--surf2);border:.5px solid var(--b2);color:var(--muted);font-size:13px;}
 .mp-skip-row{display:flex;gap:6px;padding:0 14px 8px;flex-shrink:0;flex-wrap:wrap;}
-.btn-skip{flex:1 1 84px;padding:12px 0;border-radius:var(--rs);border:.5px solid var(--b2);background:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;}
+.btn-skip{flex:1 1 84px;padding:12px 0;min-height:44px;border-radius:var(--rs);border:.5px solid var(--b2);background:none;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;}
 .mp-exp{display:none;padding:6px 14px;border-top:.5px solid var(--b1);flex-shrink:0;}
 .mp-exp.vis{display:block;}
 .exp-row{display:flex;align-items:center;gap:6px;}
@@ -447,7 +431,7 @@ var _PWD = "wottrich2026";
 function checkPassword(){
   var val = document.getElementById("lock-input").value;
   if(val === _PWD){
-    localStorage.setItem("wt-auth", Date.now().toString());
+    try{ localStorage.setItem("wt-auth", Date.now().toString()); }catch(e){}
     document.getElementById("lock-screen").style.display = "none";
   } else {
     var err = document.getElementById("lock-error");
@@ -459,7 +443,8 @@ function checkPassword(){
 }
 
 (function(){
-  var auth = localStorage.getItem("wt-auth");
+  var auth = null;
+  try{ auth = localStorage.getItem("wt-auth"); }catch(e){}
   if(auth && (Date.now() - parseInt(auth)) < 24*60*60*1000){
     document.getElementById("lock-screen").style.display = "none";
     return;
@@ -735,6 +720,14 @@ function checkPassword(){
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+// Guarda: si la libreria de Excel no cargo (sin internet y sin cache), avisar en vez de romper.
+window._wtXlsxReady = function(){
+  if(typeof XLSX !== "undefined") return true;
+  alert("La libreria de Excel no esta disponible.\n\nConectate a internet una vez para que quede guardada offline; despues vas a poder exportar sin conexion.");
+  return false;
+};
+</script>
 <script>
 // ── EVENTS ──────────────────────────────────────────────────────
 var EVENTS=["5m","10m","15m desde pared","15m con partida","25m Libre","25m Libre con partida","25m Mariposa","25m Mariposa con partida","25m Pecho","25m Pecho con partida","25m Espalda","25m Espalda con partida","25m Pateo Libre","25m Pateo Libre con Aleta","25m Subacuático con Aleta","25m Subacuático sin Aleta","25m Pateo Pecho con Aleta","25m Pateo Pecho sin Aleta","25m Pateo Espalda con Aleta","25m Pateo Espalda sin Aleta","25m Pateo Mariposa sin Aleta","25m Pateo Mariposa con Aleta","25m Mariposa c/par c/aleta","50m /25 pat 25 libre","50m /25 pat 25 mariposa","50m /25 pat 25 pecho","50m /25 pat 25 espalda","25m libre c/par c/aleta","35m Libre","35m Libre con partida","35m Mariposa","35m Mariposa con partida","35m Pecho","35m Pecho con partida","35m Espalda","35m Espalda con partida","50m Libre","50m Libre con partida","50m Mariposa","50m Mariposa con partida","50m Pecho","50m Pecho con partida","50m Espalda","50m Espalda con partida","50m Comb Espalda","50m Comb Pecho","50m Comb Mariposa","65m Libre","65m Libre con partida","65m Mariposa","65m Mariposa con partida","65m Pecho","65m Pecho con partida","65m Espalda","65m Espalda con partida","75m Libre","75m Libre con partida","75m Mariposa","75m Mariposa con partida","75m Pecho","75m Pecho con partida","75m Espalda","75m Espalda con partida","100m Libre","100m Libre con partida","100m Mariposa","100m Mariposa con partida","100m Pecho","100m Pecho con partida","100m Espalda","100m Espalda con partida","100m Combinado","200m Libre","200m Libre con partida","200m Mariposa","200m Mariposa con partida","200m Pecho","200m Pecho con partida","200m Espalda","200m Espalda con partida","400m Libre","400m Combinado","800m Libre","Otro"];
@@ -2037,6 +2030,9 @@ function stopAll(){
   updateGlobalBtns();updateSaveBar();
 }
 function resetAllTimer(){
+  var running=swimmers.some(function(x){return x.state&&x.state!=="idle";});
+  if(running&&!confirm("¿Reiniciar TODOS los cronómetros? Se perderán los tiempos no guardados de esta sesión."))return;
+  _wtSnapshot();
   stopLoop();
   swimmers.forEach(function(s){resetOneSw(s);});
   selId=null;renderMiniCards();updateGlobalBtns();clearMP();
@@ -2367,6 +2363,7 @@ document.getElementById("btn-xlsx").addEventListener("click",function(){
   var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length&&!all.some(function(d){return d.bid&&d.bid===b.id;}))all.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
   if(!all.length){alert("Sin datos.");return;}
   if(typeof XLSX==="undefined"){alert("Excel no disponible.");return;}
+  if(!window._wtXlsxReady())return;
   var wb=XLSX.utils.book_new();
   all.forEach(function(bl){
     if(!bl.reps||!bl.reps.length)return;
@@ -2433,7 +2430,7 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
 document.getElementById("btn-prev-rep").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevRep(s);});
 document.getElementById("btn-prev-block").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevBlock(s);});
 document.getElementById("btn-skip-block").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)nextBlock(s);});
-document.getElementById("btn-end-sw").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)finishSw(s);});
+document.getElementById("btn-end-sw").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(!s)return;if(!confirm("¿Terminar la sesión de "+s.name+"? Se cerrará el cronómetro y se guardarán los tiempos registrados."))return;finishSw(s);});
 document.getElementById("btn-prev").addEventListener("click",function(){navSw(-1);});
 document.getElementById("btn-next").addEventListener("click",function(){navSw(1);});
 document.getElementById("btn-start-all").addEventListener("click",startAll);
@@ -3731,6 +3728,7 @@ document.getElementById("btn-pdf-timer").addEventListener("click",function(){
 // ── SESSION EXCEL EXPORT ─────────────────────────────────────────
 function exportSessionXLSX(swimmersData,customDate){
   if(typeof XLSX==="undefined"){alert("Excel no disponible. Recargá el app.");return;}
+  if(!window._wtXlsxReady())return;
   var wb=XLSX.utils.book_new();
   var date=customDate||new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"2-digit",year:"numeric"});
   var today=MC[todayKey()];
@@ -5005,33 +5003,38 @@ function gymCardRoller(){
   );
 }
 
+var gymRestEndAt = 0;
 function gymStartRest(seconds, exercise){
   if(gymRestTimer) clearInterval(gymRestTimer);
   gymRestRemaining = seconds;
   gymRestTotal = seconds;
   gymRestExercise = exercise;
+  gymRestEndAt = Date.now() + seconds*1000;
   document.getElementById("gym-rest-overlay").style.display = "block";
   document.getElementById("gym-rest-exercise").textContent = exercise;
   gymUpdateRestDisplay();
   gymRestTimer = setInterval(function(){
-    gymRestRemaining--;
+    // Reloj absoluto: no se desfasa si la pantalla se apaga o la app pasa a segundo plano
+    gymRestRemaining = Math.ceil((gymRestEndAt - Date.now())/1000);
     if(gymRestRemaining <= 0){
       clearInterval(gymRestTimer);
       gymRestTimer = null;
       document.getElementById("gym-rest-overlay").style.display = "none";
+      gymRestEndAt = 0;
       // vibrate if supported
       if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      try{ _wtBeep(); }catch(e){}
     } else {
       gymUpdateRestDisplay();
     }
-  }, 1000);
+  }, 250);
 }
 
 function gymUpdateRestDisplay(){
   var m = Math.floor(gymRestRemaining/60);
   var s = gymRestRemaining%60;
   document.getElementById("gym-rest-time").textContent = m+":"+(s<10?"0":"")+s;
-  var pct = (gymRestRemaining/gymRestTotal)*100;
+  var pct = Math.max(0,Math.min(100,(gymRestRemaining/gymRestTotal)*100));
   document.getElementById("gym-rest-bar").style.width = pct+"%";
 }
 
@@ -5406,64 +5409,248 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
 .edit-subrest-row{display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:6px;border-top:.5px solid var(--b1);}
 </style>
 <script>
-// ── SERVICE WORKER INLINE ─────────────────────────────────
+
+// ── W·TIMER RUNTIME (pantalla activa, almacenamiento, respaldo) ───────────
 (function(){
-  if(!("serviceWorker" in navigator)) return;
-  var swCode = [
-    "const CACHE='wtimer-v2';",
-    "const SELF_URL=self.location.href;",
-    "self.addEventListener('install',function(e){",
-    "  e.waitUntil(caches.open(CACHE).then(function(c){return c.add(SELF_URL);}));",
-    "  self.skipWaiting();",
-    "});",
-    "self.addEventListener('activate',function(e){",
-    "  e.waitUntil(caches.keys().then(function(keys){",
-    "    return Promise.all(keys.filter(function(k){return k!==CACHE;}).map(function(k){return caches.delete(k);}));",
-    "  }));",
-    "  self.clients.claim();",
-    "});",
-    "self.addEventListener('fetch',function(e){",
-    "  if(e.request.mode==='navigate'){",
-    "    e.respondWith(fetch(e.request).then(function(r){",
-    "      var cl=r.clone();",
-    "      caches.open(CACHE).then(function(c){c.put(e.request,cl);});",
-    "      return r;",
-    "    }).catch(function(){return caches.match(SELF_URL);}));",
-    "  }",
-    "});"
-  ].join("\n");
-  var blob=new Blob([swCode],{type:"application/javascript"});
-  navigator.serviceWorker.register(URL.createObjectURL(blob),{scope:"./"})
-    .then(function(r){console.log("[PWA] SW ok:",r.scope);})
-    .catch(function(e){console.warn("[PWA] SW err:",e);});
+  "use strict";
+
+  // 1) WAKE LOCK — evita que la pantalla se apague durante una serie
+  var _wl = null, _wlWanted = false;
+  function wlSupported(){ return "wakeLock" in navigator; }
+  async function wlAcquire(){
+    _wlWanted = true;
+    if(!wlSupported() || _wl || document.visibilityState !== "visible") return;
+    try{
+      _wl = await navigator.wakeLock.request("screen");
+      _wl.addEventListener("release", function(){ _wl = null; });
+      wlBadge(true);
+    }catch(e){ _wl = null; wlBadge(false); }
+  }
+  function wlRelease(){
+    _wlWanted = false;
+    if(_wl){ try{ _wl.release(); }catch(e){} _wl = null; }
+    wlBadge(false);
+  }
+  function wlBadge(on){
+    var el = document.getElementById("wt-wl-badge");
+    if(!el) return;
+    el.style.opacity = on ? "1" : "0.35";
+    el.title = on ? "Pantalla siempre encendida: activa" : "Pantalla siempre encendida: inactiva";
+  }
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible"){
+      if(_wlWanted) wlAcquire();
+      // Re-sincronizar el loop del cronometro al volver del segundo plano
+      try{ if(typeof ensureLoop === "function") ensureLoop(); }catch(e){}
+      try{ if(typeof renderMiniCards === "function") renderMiniCards(); }catch(e){}
+    }
+  });
+  window._wtWakeOn = wlAcquire;
+  window._wtWakeOff = wlRelease;
+
+  // Activar automaticamente al entrar al cronometro o al gym
+  document.addEventListener("click", function(ev){
+    var t = ev.target.closest ? ev.target.closest("#tab-timer,#tab-gym,#btn-start-all,.btn-g.go") : null;
+    if(t) wlAcquire();
+  }, true);
+
+  // 2) PITIDO DE FIN DE DESCANSO (no depende del parlante Bluetooth)
+  window._wtBeep = function(){
+    try{
+      var C = window.AudioContext || window.webkitAudioContext;
+      if(!C) return;
+      var ctx = window._wtBeepCtx || (window._wtBeepCtx = new C());
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "square"; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.15, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.35);
+    }catch(e){}
+  };
+
+  // 3) ALMACENAMIENTO PERSISTENTE — evita que Safari/Chrome borre los datos
+  (function(){
+    if(navigator.storage && navigator.storage.persist){
+      navigator.storage.persisted().then(function(already){
+        if(!already) return navigator.storage.persist();
+      }).catch(function(){});
+    }
+  })();
+
+  // 4) AVISO DE ESPACIO — localStorage se llena cerca de los 5 MB
+  var WT_KEYS = ["swim-v6","swim-profiles","swim-templates","swim-sessions-draft","wt-bt-offset","wt-race-mode"];
+  function usedBytes(){
+    var n = 0;
+    for(var i=0;i<localStorage.length;i++){
+      var k = localStorage.key(i);
+      n += (k.length + (localStorage.getItem(k)||"").length) * 2;
+    }
+    return n;
+  }
+  function checkQuota(){
+    var used = usedBytes(), pct = used / (5*1024*1024);
+    var bar = document.getElementById("wt-storage-bar");
+    var lbl = document.getElementById("wt-storage-lbl");
+    if(bar) bar.style.width = Math.min(100, pct*100).toFixed(1) + "%";
+    if(bar) bar.style.background = pct > 0.8 ? "var(--red)" : (pct > 0.6 ? "var(--amber)" : "var(--green)");
+    if(lbl) lbl.textContent = (used/1024/1024).toFixed(2) + " MB de ~5 MB usados";
+    if(pct > 0.85 && !sessionStorage.getItem("wt-quota-warned")){
+      sessionStorage.setItem("wt-quota-warned","1");
+      alert("El almacenamiento del dispositivo esta casi lleno (" + Math.round(pct*100) + "%).\n\nDescarga un respaldo desde Config y borra sesiones viejas del Historial para no perder datos.");
+    }
+  }
+  window._wtCheckQuota = checkQuota;
+
+  // 5) RESPALDO COMPLETO (exportar / importar todo)
+  window._wtBackup = function(){
+    var dump = { _app:"wtimer", _version:1, _date:new Date().toISOString(), data:{} };
+    WT_KEYS.forEach(function(k){
+      var v = localStorage.getItem(k);
+      if(v !== null) dump.data[k] = v;
+    });
+    var blob = new Blob([JSON.stringify(dump)], {type:"application/json"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "wtimer_respaldo_" + new Date().toISOString().slice(0,10) + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    localStorage.setItem("wt-last-backup", Date.now().toString());
+    updateBackupLabel();
+  };
+  window._wtRestore = function(file){
+    var r = new FileReader();
+    r.onload = function(){
+      try{
+        var dump = JSON.parse(r.result);
+        if(!dump || dump._app !== "wtimer" || !dump.data) throw new Error("formato");
+        if(!confirm("Esto va a REEMPLAZAR nadadores, plantillas e historial actuales por los del respaldo.\n\n\u00bfContinuar?")) return;
+        Object.keys(dump.data).forEach(function(k){ localStorage.setItem(k, dump.data[k]); });
+        alert("Respaldo restaurado. La app se va a recargar.");
+        location.reload();
+      }catch(e){
+        alert("El archivo no es un respaldo valido de W\u00b7Timer.");
+      }
+    };
+    r.readAsText(file);
+  };
+  function updateBackupLabel(){
+    var el = document.getElementById("wt-last-backup");
+    if(!el) return;
+    var t = parseInt(localStorage.getItem("wt-last-backup")||"0", 10);
+    if(!t){ el.textContent = "Nunca hiciste un respaldo"; el.style.color = "var(--rt)"; return; }
+    var days = Math.floor((Date.now()-t)/86400000);
+    el.textContent = "Ultimo respaldo: hace " + (days === 0 ? "menos de un dia" : days + " dia" + (days>1?"s":""));
+    el.style.color = days > 14 ? "var(--at)" : "var(--muted)";
+  }
+  window._wtUpdateBackupLabel = updateBackupLabel;
+
+  // 6) DESHACER REINICIO GLOBAL
+  var _snap = null;
+  window._wtSnapshot = function(){
+    try{ _snap = JSON.stringify(swimmers); }catch(e){ _snap = null; }
+    if(_snap) showUndo();
+  };
+  function showUndo(){
+    var old = document.getElementById("wt-undo-bar");
+    if(old) old.remove();
+    var b = document.createElement("div");
+    b.id = "wt-undo-bar";
+    b.style.cssText = "position:fixed;left:12px;right:12px;bottom:14px;z-index:9000;background:var(--surf2);border:.5px solid var(--b3);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:12px;font-family:inherit;box-shadow:0 8px 28px rgba(0,0,0,.5)";
+    b.innerHTML = "<div style='flex:1;font-size:13px;color:var(--text)'>Cronometros reiniciados</div>";
+    var btn = document.createElement("button");
+    btn.textContent = "\u21a9 Deshacer";
+    btn.style.cssText = "min-height:44px;padding:0 18px;border-radius:var(--rs);border:.5px solid var(--bb);background:var(--bd);color:var(--bt);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit";
+    btn.onclick = function(){
+      if(!_snap) return;
+      try{
+        var restored = JSON.parse(_snap);
+        swimmers.length = 0;
+        restored.forEach(function(x){ swimmers.push(x); });
+        if(typeof renderMiniCards === "function") renderMiniCards();
+        if(typeof updateGlobalBtns === "function") updateGlobalBtns();
+        if(typeof ensureLoop === "function") ensureLoop();
+      }catch(e){}
+      b.remove();
+    };
+    b.appendChild(btn);
+    document.body.appendChild(b);
+    setTimeout(function(){ if(b.parentNode) b.remove(); }, 12000);
+  }
+
+  // 7) Panel en Config
+  document.addEventListener("DOMContentLoaded", function(){
+    // Indicador de pantalla activa en el header
+    var hdr = document.querySelector(".hdr");
+    if(hdr){
+      var badge = document.createElement("div");
+      badge.id = "wt-wl-badge";
+      badge.textContent = "\u2600";
+      badge.style.cssText = "margin-left:auto;font-size:16px;opacity:.35;padding:6px 8px;cursor:pointer;line-height:1";
+      badge.onclick = function(){ _wl ? wlRelease() : wlAcquire(); };
+      hdr.appendChild(badge);
+      wlBadge(false);
+      if(!wlSupported()) badge.style.display = "none";
+    }
+
+    var cfg = document.querySelector("#view-config .scroll");
+    if(cfg){
+      var box = document.createElement("div");
+      box.innerHTML =
+        "<div class='slbl' style='margin-top:18px;'>\ud83d\udcbe Respaldo de datos</div>" +
+        "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
+          "<div style='font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;'>Todo se guarda en este dispositivo. Si borras los datos del navegador o cambias de equipo, se pierde. Descarga un respaldo cada tanto.</div>" +
+          "<div id='wt-last-backup' style='font-size:12px;margin-bottom:10px;'></div>" +
+          "<div style='height:6px;background:var(--b2);border-radius:3px;overflow:hidden;margin-bottom:6px;'><div id='wt-storage-bar' style='height:100%;width:0;background:var(--green);border-radius:3px;transition:width .3s;'></div></div>" +
+          "<div id='wt-storage-lbl' style='font-size:11px;color:var(--faint);margin-bottom:12px;'></div>" +
+          "<div style='display:flex;gap:8px;'>" +
+            "<button id='wt-btn-backup' style='flex:1;min-height:44px;padding:10px;border-radius:var(--rs);border:.5px solid var(--gb);background:var(--gd);color:var(--gt);font-size:13px;cursor:pointer;font-family:inherit;'>\u2193 Descargar respaldo</button>" +
+            "<label style='flex:1;min-height:44px;padding:10px;border-radius:var(--rs);border:.5px solid var(--bb);background:var(--bd);color:var(--bt);font-size:13px;cursor:pointer;font-family:inherit;text-align:center;display:flex;align-items:center;justify-content:center;'>\u2191 Restaurar<input type='file' id='wt-inp-restore' accept='.json' style='display:none'></label>" +
+          "</div>" +
+        "</div>";
+      cfg.appendChild(box);
+      document.getElementById("wt-btn-backup").addEventListener("click", function(){ window._wtBackup(); });
+      document.getElementById("wt-inp-restore").addEventListener("change", function(e){
+        if(e.target.files && e.target.files[0]) window._wtRestore(e.target.files[0]);
+        e.target.value = "";
+      });
+      updateBackupLabel();
+      checkQuota();
+      setInterval(checkQuota, 60000);
+    }
+
+    // Recordatorio de respaldo si hace mas de 14 dias
+    setTimeout(function(){
+      var t = parseInt(localStorage.getItem("wt-last-backup")||"0", 10);
+      var seen = sessionStorage.getItem("wt-backup-nag");
+      if(!seen && (!t || Date.now()-t > 14*86400000)){
+        sessionStorage.setItem("wt-backup-nag","1");
+        var n = document.createElement("div");
+        n.style.cssText = "position:fixed;left:12px;right:12px;bottom:14px;z-index:8500;background:var(--surf2);border:.5px solid var(--ab);border-radius:var(--r);padding:12px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 28px rgba(0,0,0,.5)";
+        n.innerHTML = "<div style='flex:1;font-size:12px;color:var(--at);line-height:1.4'>Hace tiempo que no descargas un respaldo de tus datos.</div>";
+        var ok = document.createElement("button");
+        ok.textContent = "Respaldar";
+        ok.style.cssText = "min-height:44px;padding:0 16px;border-radius:var(--rs);border:.5px solid var(--gb);background:var(--gd);color:var(--gt);font-size:13px;cursor:pointer;font-family:inherit";
+        ok.onclick = function(){ window._wtBackup(); n.remove(); };
+        var x = document.createElement("button");
+        x.textContent = "\u00d7";
+        x.style.cssText = "background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;padding:0 6px;min-height:44px";
+        x.onclick = function(){ n.remove(); };
+        n.appendChild(ok); n.appendChild(x);
+        document.body.appendChild(n);
+      }
+    }, 6000);
+  });
 })();
 
-// ── MANIFEST DINAMICO ─────────────────────────────────────
+// ── SERVICE WORKER (archivo real: los navegadores rechazan blob:) ─────────
 (function(){
-  var manifest={name:"Wottrich Timer",short_name:"W·Timer",
-    description:"Timer profesional de natación",start_url:"./",
-    display:"standalone",background_color:"#0a0a0a",theme_color:"#0d1f35",
-    orientation:"portrait-primary",icons:[]};
-  try{
-    var c=document.createElement("canvas");c.width=512;c.height=512;
-    var ctx=c.getContext("2d");
-    var r=110;ctx.beginPath();ctx.moveTo(r,0);ctx.lineTo(512-r,0);
-    ctx.quadraticCurveTo(512,0,512,r);ctx.lineTo(512,512-r);
-    ctx.quadraticCurveTo(512,512,512-r,512);ctx.lineTo(r,512);
-    ctx.quadraticCurveTo(0,512,0,512-r);ctx.lineTo(0,r);
-    ctx.quadraticCurveTo(0,0,r,0);ctx.closePath();
-    ctx.fillStyle="#0d1f35";ctx.fill();
-    ctx.fillStyle="#4cd97b";
-    ctx.font="bold 380px -apple-system,BlinkMacSystemFont,sans-serif";
-    ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("W",256,285);
-    ctx.fillStyle="#1a6fb5";ctx.fillRect(80,390,352,12);
-    manifest.icons=[{src:c.toDataURL("image/png"),sizes:"512x512",
-      type:"image/png",purpose:"any maskable"}];
-  }catch(e){}
-  var blob=new Blob([JSON.stringify(manifest)],{type:"application/manifest+json"});
-  var link=document.createElement("link");
-  link.rel="manifest";link.href=URL.createObjectURL(blob);
-  document.head.appendChild(link);
+  if(!("serviceWorker" in navigator)) return;
+  if(location.protocol !== "https:" && location.hostname !== "localhost") return;
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("./sw.js", {scope:"./"})
+      .then(function(r){ console.log("[PWA] SW ok:", r.scope); })
+      .catch(function(e){ console.warn("[PWA] SW err:", e); });
+  });
 })();
 
 // ── BANNER INSTALACION ────────────────────────────────────
@@ -5510,5 +5697,223 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
   }
 })();
 </script>
+
+<!-- ── SINCRONIZACION EN LA NUBE (Supabase) ───────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" defer></script>
+<script>
+(function(){
+  "use strict";
+  var CLOUD_KEYS = ["swim-v6","swim-profiles","swim-templates","swim-sessions-draft","wt-bt-offset","wt-race-mode"];
+  var LS = window.localStorage;
+  var cfg = { url: LS.getItem("wt-sb-url")||"", key: LS.getItem("wt-sb-key")||"" };
+  var sb = null, user = null, pushTimer = null, applying = false, lastPull = 0;
+
+  function mtimeKey(k){ return "wt-lm-" + k; }
+  function localMtime(k){ return parseInt(LS.getItem(mtimeKey(k))||"0",10); }
+  function status(msg, color){
+    var el = document.getElementById("wt-cloud-status");
+    if(el){ el.textContent = msg; el.style.color = color || "var(--muted)"; }
+  }
+
+  // Marca de tiempo local en cada escritura + auto-subida
+  var _set = LS.setItem.bind(LS);
+  LS.setItem = function(k, v){
+    _set(k, v);
+    if(!applying && CLOUD_KEYS.indexOf(k) >= 0){
+      _set(mtimeKey(k), Date.now().toString());
+      schedulePush();
+    }
+  };
+
+  function client(){
+    if(sb) return sb;
+    if(!cfg.url || !cfg.key || !window.supabase || !window.supabase.createClient) return null;
+    sb = window.supabase.createClient(cfg.url, cfg.key, {
+      auth: { persistSession: true, autoRefreshToken: true, storageKey: "wt-sb-auth" }
+    });
+    return sb;
+  }
+
+  function schedulePush(){
+    if(!user) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(function(){ push(); }, 1500);
+  }
+
+  function push(silent){
+    var c = client();
+    if(!c || !user) return Promise.resolve();
+    var rows = CLOUD_KEYS.map(function(k){
+      return {
+        user_id: user.id,
+        key: k,
+        value: LS.getItem(k),
+        updated_at: new Date(localMtime(k) || Date.now()).toISOString()
+      };
+    }).filter(function(r){ return r.value !== null; });
+    if(!rows.length) return Promise.resolve();
+    if(!silent) status("Subiendo\u2026");
+    return c.from("wt_state").upsert(rows, { onConflict: "user_id,key" }).then(function(res){
+      if(res.error){ status("Error al subir: " + res.error.message, "var(--rt)"); return; }
+      LS.setItem("wt-sb-lastsync", Date.now().toString());
+      status("Sincronizado \u2713 " + new Date().toLocaleTimeString(), "var(--gt)");
+    });
+  }
+
+  function pull(silent){
+    var c = client();
+    if(!c || !user) return Promise.resolve(false);
+    if(!silent) status("Bajando\u2026");
+    return c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id).then(function(res){
+      if(res.error){ status("Error al bajar: " + res.error.message, "var(--rt)"); return false; }
+      var changed = false;
+      applying = true;
+      (res.data||[]).forEach(function(row){
+        if(CLOUD_KEYS.indexOf(row.key) < 0) return;
+        var remoteT = new Date(row.updated_at).getTime();
+        if(remoteT > localMtime(row.key) && row.value !== LS.getItem(row.key)){
+          _set(row.key, row.value);
+          _set(mtimeKey(row.key), remoteT.toString());
+          changed = true;
+        }
+      });
+      applying = false;
+      lastPull = Date.now();
+      if(changed){
+        status("Datos nuevos de la nube \u2014 recargando\u2026", "var(--gt)");
+        setTimeout(function(){ location.reload(); }, 600);
+      }else{
+        status("Al d\u00eda \u2713 " + new Date().toLocaleTimeString(), "var(--gt)");
+      }
+      return changed;
+    });
+  }
+
+  function afterSession(u){
+    user = u;
+    renderCloud();
+    if(!u) return;
+    pull().then(function(changed){ if(!changed) push(true); });
+    try{
+      client().channel("wt_state_" + u.id)
+        .on("postgres_changes", { event:"*", schema:"public", table:"wt_state", filter:"user_id=eq."+u.id },
+            function(){ if(Date.now() - lastPull > 3000) pull(true); })
+        .subscribe();
+    }catch(e){}
+  }
+
+  function boot(){
+    var c = client();
+    if(!c) return;
+    c.auth.getSession().then(function(r){
+      afterSession(r.data && r.data.session ? r.data.session.user : null);
+    });
+    c.auth.onAuthStateChange(function(ev, session){
+      var u = session ? session.user : null;
+      if((u && !user) || (!u && user)) afterSession(u);
+    });
+  }
+
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible" && user && Date.now() - lastPull > 15000) pull(true);
+  });
+  window.addEventListener("online", function(){ if(user) push(true); });
+
+  // ── Interfaz en Config ───────────────────────────────────────────
+  function esc(s){ return (s||"").replace(/"/g,"&quot;"); }
+  var BTN = "min-height:44px;padding:10px 12px;border-radius:var(--rs);font-size:13px;cursor:pointer;font-family:inherit;";
+  var INP = "width:100%;min-height:44px;padding:10px;margin-bottom:8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box;";
+
+  function renderCloud(){
+    var host = document.getElementById("wt-cloud-body");
+    if(!host) return;
+    if(!cfg.url || !cfg.key){
+      host.innerHTML =
+        "<div style='font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;'>Peg\u00e1 los datos de tu proyecto de Supabase (Project Settings \u2192 API). Se guardan solo en este dispositivo.</div>" +
+        "<input id='wt-sb-url' style=\""+INP+"\" placeholder='https://xxxx.supabase.co' value=\""+esc(cfg.url)+"\">" +
+        "<input id='wt-sb-key' style=\""+INP+"\" placeholder='anon public key' value=\""+esc(cfg.key)+"\">" +
+        "<button id='wt-sb-save' style=\""+BTN+"width:100%;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Guardar conexi\u00f3n</button>";
+      document.getElementById("wt-sb-save").onclick = function(){
+        cfg.url = document.getElementById("wt-sb-url").value.trim().replace(/\/+$/,"");
+        cfg.key = document.getElementById("wt-sb-key").value.trim();
+        if(!cfg.url || !cfg.key){ alert("Complet\u00e1 los dos campos."); return; }
+        LS.setItem("wt-sb-url", cfg.url); LS.setItem("wt-sb-key", cfg.key);
+        sb = null; renderCloud(); boot();
+      };
+      return;
+    }
+    if(!user){
+      host.innerHTML =
+        "<div style='font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;'>Entr\u00e1 con tu email para ver los mismos datos en la PC y en el iPad.</div>" +
+        "<input id='wt-sb-mail' type='email' autocomplete='email' style=\""+INP+"\" placeholder='tu@email.com'>" +
+        "<input id='wt-sb-pass' type='password' autocomplete='current-password' style=\""+INP+"\" placeholder='contrase\u00f1a'>" +
+        "<div style='display:flex;gap:8px;'>" +
+          "<button id='wt-sb-in' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">Entrar</button>" +
+          "<button id='wt-sb-up' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Crear cuenta</button>" +
+        "</div>" +
+        "<button id='wt-sb-forget' style=\""+BTN+"width:100%;margin-top:8px;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cambiar proyecto</button>";
+      var mail = function(){ return document.getElementById("wt-sb-mail").value.trim(); };
+      var pass = function(){ return document.getElementById("wt-sb-pass").value; };
+      document.getElementById("wt-sb-in").onclick = function(){
+        status("Entrando\u2026");
+        client().auth.signInWithPassword({ email: mail(), password: pass() }).then(function(r){
+          if(r.error) status("No se pudo entrar: " + r.error.message, "var(--rt)");
+        });
+      };
+      document.getElementById("wt-sb-up").onclick = function(){
+        status("Creando cuenta\u2026");
+        client().auth.signUp({ email: mail(), password: pass() }).then(function(r){
+          if(r.error){ status("No se pudo crear: " + r.error.message, "var(--rt)"); return; }
+          if(!r.data.session) status("Revis\u00e1 tu email y confirm\u00e1 la cuenta, despu\u00e9s entr\u00e1.", "var(--at)");
+        });
+      };
+      document.getElementById("wt-sb-forget").onclick = function(){
+        if(!confirm("\u00bfBorrar la conexi\u00f3n guardada en este dispositivo? Tus datos en la nube no se tocan.")) return;
+        LS.removeItem("wt-sb-url"); LS.removeItem("wt-sb-key");
+        cfg = { url:"", key:"" }; sb = null; user = null; renderCloud();
+      };
+      return;
+    }
+    host.innerHTML =
+      "<div style='font-size:12px;color:var(--gt);margin-bottom:4px;'>\u2713 Conectado como " + esc(user.email||"") + "</div>" +
+      "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:10px;'>Todo se guarda autom\u00e1ticamente en la nube.</div>" +
+      "<div style='display:flex;gap:8px;margin-bottom:8px;'>" +
+        "<button id='wt-sb-push' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">\u2191 Subir ahora</button>" +
+        "<button id='wt-sb-pullb' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">\u2193 Bajar ahora</button>" +
+      "</div>" +
+      "<button id='wt-sb-out' style=\""+BTN+"width:100%;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cerrar sesi\u00f3n</button>";
+    document.getElementById("wt-sb-push").onclick = function(){
+      CLOUD_KEYS.forEach(function(k){ if(LS.getItem(k) !== null) _set(mtimeKey(k), Date.now().toString()); });
+      push();
+    };
+    document.getElementById("wt-sb-pullb").onclick = function(){
+      CLOUD_KEYS.forEach(function(k){ _set(mtimeKey(k), "0"); });
+      pull();
+    };
+    document.getElementById("wt-sb-out").onclick = function(){
+      if(!confirm("\u00bfCerrar sesi\u00f3n? Los datos siguen en este dispositivo y en la nube.")) return;
+      client().auth.signOut().then(function(){ user = null; renderCloud(); });
+    };
+  }
+
+  function mount(){
+    var cfgView = document.querySelector("#view-config .scroll");
+    if(!cfgView || document.getElementById("wt-cloud-body")) return;
+    var box = document.createElement("div");
+    box.innerHTML =
+      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos</div>" +
+      "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
+        "<div id='wt-cloud-body'></div>" +
+      "</div>";
+    cfgView.appendChild(box);
+    renderCloud();
+  }
+
+  function start(){ mount(); boot(); }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ setTimeout(start, 300); });
+  else setTimeout(start, 300);
+})();
+</script>
+
 </body>
 </html>
