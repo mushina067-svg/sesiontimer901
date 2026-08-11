@@ -5777,7 +5777,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     return c.from("wt_state").upsert(rows, { onConflict: "user_id,key" }).then(function(res){
       if(res.error){ status("Error al subir: " + res.error.message, "var(--rt)"); return; }
       LS.setItem("wt-sb-lastsync", Date.now().toString());
-      status("Sincronizado \u2713 " + new Date().toLocaleTimeString(), "var(--gt)");
+      status("Subido \u2713 " + rows.length + " bloques \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
     });
   }
 
@@ -5804,7 +5804,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
         status("Datos nuevos de la nube \u2014 recargando\u2026", "var(--gt)");
         setTimeout(function(){ location.reload(); }, 600);
       }else{
-        status("Al d\u00eda \u2713 " + new Date().toLocaleTimeString(), "var(--gt)");
+        status("Bajada completa \u2713 sin cambios \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
       }
       return changed;
     });
@@ -5934,6 +5934,8 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
         "<button id='wt-sb-push' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">\u2191 Subir ahora</button>" +
         "<button id='wt-sb-pullb' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">\u2193 Bajar ahora</button>" +
       "</div>" +
+      "<button id='wt-sb-diag' style=\""+BTN+"width:100%;margin-bottom:8px;border:.5px solid var(--b2);background:transparent;color:var(--muted);\">\u2139 Diagn\u00f3stico de la nube</button>" +
+      "<pre id='wt-sb-diagout' style='white-space:pre-wrap;font-size:10px;line-height:1.4;color:var(--muted);margin:0 0 8px;font-family:ui-monospace,monospace;'></pre>" +
       "<button id='wt-sb-out' style=\""+BTN+"width:100%;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cerrar sesi\u00f3n</button>";
     document.getElementById("wt-sb-push").onclick = function(){
       CLOUD_KEYS.forEach(function(k){ if(LS.getItem(k) !== null) _set(mtimeKey(k), Date.now().toString()); });
@@ -5942,6 +5944,25 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     document.getElementById("wt-sb-pullb").onclick = function(){
       CLOUD_KEYS.forEach(function(k){ _set(mtimeKey(k), "0"); });
       pull();
+    };
+    document.getElementById("wt-sb-diag").onclick = function(){
+      var c = needClient(); if(!c) return;
+      var out = document.getElementById("wt-sb-diagout");
+      out.textContent = "Consultando la nube\u2026";
+      c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id).then(function(res){
+        if(res.error){ out.textContent = "Error: " + res.error.message; return; }
+        var rows = res.data || [];
+        var txt = "Cuenta: " + (user.email||"") + "\nID: " + user.id.slice(0,8) + "\u2026\n";
+        txt += "Filas en la nube: " + rows.length + "\n\n";
+        CLOUD_KEYS.forEach(function(k){
+          var r = null;
+          rows.forEach(function(x){ if(x.key===k) r = x; });
+          var loc = LS.getItem(k);
+          txt += k + "\n  aqu\u00ed: " + (loc===null? "vac\u00edo" : (loc.length + " car.")) +
+                 "  |  nube: " + (r ? (String(r.value||"").length + " car. \u00b7 " + new Date(r.updated_at).toLocaleString()) : "vac\u00edo") + "\n";
+        });
+        out.textContent = txt;
+      });
     };
     document.getElementById("wt-sb-out").onclick = function(){
       if(!confirm("\u00bfCerrar sesi\u00f3n? Los datos siguen en este dispositivo y en la nube.")) return;
@@ -5955,7 +5976,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     if(!cfgView || document.getElementById("wt-cloud-body")) return;
     var box = document.createElement("div");
     box.innerHTML =
-      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v9)</span></div>" +
+      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v11)</span></div>" +
       "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
         "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:8px;min-height:14px;'></div>" +
         "<div id='wt-cloud-body'></div>" +
