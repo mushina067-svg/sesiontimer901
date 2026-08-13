@@ -5798,43 +5798,45 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     var c = client();
     if(!c || !user) return Promise.resolve();
     if(!silent) status("Subiendo\u2026");
-    // Protecci\u00f3n: nunca pisar en la nube un bloque con contenido usando uno vac\u00edo de este equipo
+    // La modificaci\u00f3n m\u00e1s reciente gana; [] es un borrado intencional y tambi\u00e9n se sincroniza.
     return c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id).then(function(pre){
       var remote = {};
       if(!pre.error) (pre.data||[]).forEach(function(r){ remote[r.key] = r; });
-      var skipped = [];
+      var adopted = [];
       var rows = [];
       applying = true;
       CLOUD_KEYS.forEach(function(k){
         var local = LS.getItem(k);
         if(local === null) return;
         var r = remote[k];
-        if(r && isEmptyVal(local) && !isEmptyVal(r.value)){
-          // adoptamos lo de la nube en vez de borrarlo
-          _set(k, r.value);
-          _set(mtimeKey(k), new Date(r.updated_at).getTime().toString());
-          skipped.push(k);
+        var localT = localMtime(k);
+        var remoteT = r ? new Date(r.updated_at).getTime() : 0;
+        if(r && remoteT > localT){
+          if(r.value !== local) _set(k, r.value);
+          _set(mtimeKey(k), remoteT.toString());
+          adopted.push(k);
           return;
         }
         rows.push({
           user_id: user.id,
           key: k,
           value: local,
-          updated_at: new Date(localMtime(k) || Date.now()).toISOString()
+          updated_at: new Date(localT || Date.now()).toISOString()
         });
       });
       applying = false;
       if(!rows.length){
-        status("Nada para subir" + (skipped.length ? " \u00b7 " + skipped.length + " bloques protegidos" : ""), "var(--gt)");
+        status("Sin cambios para subir" + (adopted.length ? " \u00b7 datos m\u00e1s nuevos recibidos" : ""), "var(--gt)");
+        if(adopted.length) softRefresh();
         return;
       }
       return c.from("wt_state").upsert(rows, { onConflict: "user_id,key" }).then(function(res){
         if(res.error){ status("Error al subir: " + res.error.message, "var(--rt)"); return; }
         LS.setItem("wt-sb-lastsync", Date.now().toString());
         status("Subido \u2713 " + rows.length + " bloques" +
-               (skipped.length ? " (" + skipped.length + " protegidos)" : "") +
+               (adopted.length ? " \u00b7 datos m\u00e1s nuevos recibidos" : "") +
                " \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
-        if(skipped.length) softRefresh();
+        if(adopted.length) softRefresh();
       });
     });
   }
@@ -5852,8 +5854,8 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
         var remoteT = new Date(row.updated_at).getTime();
         var localVal = LS.getItem(row.key);
         var winsByTime = remoteT > localMtime(row.key);
-        var winsByContent = isEmptyVal(localVal) && !isEmptyVal(row.value);
-        if((winsByTime || winsByContent) && row.value !== localVal){
+        // Acepta tambi\u00e9n un valor vac\u00edo nuevo para propagar borrados.
+        if(winsByTime && row.value !== localVal){
           _set(row.key, row.value);
           _set(mtimeKey(row.key), remoteT.toString());
           changed = true;
@@ -5871,15 +5873,110 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     });
   }
 
+  // ── Multiusuario: usuarios con nombre y clave (sin email) ────────
+  var EMAIL_DOMAIN = "@wtimer.app";
+  var TRAINING_KEYS = ["swim-sessions-draft","swim-templates","swim-profiles"];
+  var role = "coach";       // "coach" (arma entrenamientos) | "member" (recibe)
+  var myDir = null;         // fila de wt_users_dir si soy alumno/academia
+  var members = [];         // usuarios creados por mi
+
+  function userToEmail(u){
+    u = (u||"").trim().toLowerCase();
+    if(!u) return "";
+    if(u.indexOf("@") >= 0) return u;
+    u = u.replace(/[^a-z0-9._-]/g, "");
+    return u + EMAIL_DOMAIN;
+  }
+  function emailToUser(e){
+    e = (e||"");
+    return e.indexOf(EMAIL_DOMAIN) > 0 ? e.split("@")[0] : e;
+  }
+
+  function loadRole(){
+    var c = client();
+    if(!c || !user) return Promise.resolve();
+    return c.from("wt_users_dir").select("id,username,coach_id").eq("id", user.id).then(function(r){
+      myDir = (!r.error && r.data && r.data[0]) ? r.data[0] : null;
+      role = (myDir && myDir.coach_id && myDir.coach_id !== user.id) ? "member" : "coach";
+      if(role === "coach") return loadMembers();
+    }).catch(function(){});
+  }
+
+  function loadMembers(){
+    var c = client();
+    if(!c || !user) return Promise.resolve();
+    return c.from("wt_users_dir").select("id,username,created_at").eq("coach_id", user.id)
+      .order("username").then(function(r){
+        members = (!r.error && r.data) ? r.data : [];
+      }).catch(function(){});
+  }
+
+  // Alumno: recibe el entrenamiento que le mando su entrenador
+  function pullShared(silent){
+    var c = client();
+    if(!c || !user) return Promise.resolve(false);
+    return c.from("wt_share").select("key,value,updated_at").eq("target_id", user.id).then(function(res){
+      if(res.error) return false;
+      var changed = false;
+      applying = true;
+      (res.data||[]).forEach(function(row){
+        var t = new Date(row.updated_at).getTime();
+        if(t > localMtime(row.key) && row.value !== LS.getItem(row.key)){
+          _set(row.key, row.value);
+          _set(mtimeKey(row.key), t.toString());
+          changed = true;
+        }
+      });
+      applying = false;
+      if(changed){
+        if(!silent) status("Entrenamiento nuevo recibido \u2713", "var(--gt)");
+        softRefresh();
+      }else if(!silent){
+        status("No hay entrenamientos nuevos \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
+      }
+      return changed;
+    }).catch(function(){ return false; });
+  }
+
+  // Entrenador: envia el entrenamiento actual a un usuario
+  function sendToMember(m, keys){
+    var c = client();
+    if(!c || !user) return Promise.resolve();
+    var now = new Date().toISOString();
+    var rows = [];
+    keys.forEach(function(k){
+      var v = LS.getItem(k);
+      if(v === null) return;
+      rows.push({ coach_id: user.id, target_id: m.id, key: k, value: v, updated_at: now });
+    });
+    if(!rows.length) return Promise.resolve(alert("No hay entrenamiento cargado para enviar."));
+    return c.from("wt_share").upsert(rows, { onConflict: "target_id,key" }).then(function(res){
+      if(res.error) status("Error al enviar: " + res.error.message, "var(--rt)");
+      else status("Enviado a " + m.username + " \u2713 " + rows.length + " bloques \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
+    });
+  }
+
   function afterSession(u){
     user = u;
+    myDir = null; members = []; role = "coach";
     renderCloud();
     if(!u) return;
-    pull().then(function(changed){ if(!changed) push(true); });
+    loadRole().then(function(){
+      renderCloud();
+      if(role === "member"){
+        pullShared().then(function(){ pull(true); });
+      }else{
+        pull().then(function(changed){ if(!changed) push(true); });
+      }
+    });
     try{
       client().channel("wt_state_" + u.id)
         .on("postgres_changes", { event:"*", schema:"public", table:"wt_state", filter:"user_id=eq."+u.id },
             function(){ if(Date.now() - lastPull > 3000) pull(true); })
+        .subscribe();
+      client().channel("wt_share_" + u.id)
+        .on("postgres_changes", { event:"*", schema:"public", table:"wt_share", filter:"target_id=eq."+u.id },
+            function(){ pullShared(true); })
         .subscribe();
     }catch(e){}
   }
@@ -5897,24 +5994,49 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
   }
 
   document.addEventListener("visibilitychange", function(){
-    if(document.visibilityState === "visible" && user && Date.now() - lastPull > 15000) pull(true);
+    if(document.visibilityState === "visible" && user && Date.now() - lastPull > 15000){
+      if(role === "member") pullShared(true);
+      pull(true);
+    }
   });
-  window.addEventListener("online", function(){ if(user) push(true); });
+  window.addEventListener("online", function(){ if(user && role !== "member") push(true); });
 
   // ── Interfaz en Config ───────────────────────────────────────────
-  function esc(s){ return (s||"").replace(/"/g,"&quot;"); }
+  function esc(s){ return String(s==null?"":s).replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
   var BTN = "min-height:44px;padding:10px 12px;border-radius:var(--rs);font-size:13px;cursor:pointer;font-family:inherit;";
   var INP = "width:100%;min-height:44px;padding:10px;margin-bottom:8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box;";
+
+  function withTimeout(promise){
+    return Promise.race([promise, new Promise(function(_, reject){
+      setTimeout(function(){ reject(new Error("La conexi\u00f3n tard\u00f3 demasiado. Revis\u00e1 la URL, la clave y tu internet.")); }, 15000);
+    })]);
+  }
+  function friendly(e){
+    var m = (e && e.message) ? e.message : String(e);
+    if(/failed to fetch|load failed|networkerror/i.test(m))
+      return "No hay conexi\u00f3n con el proyecto (" + cfg.url + "). Revis\u00e1 la direcci\u00f3n y tu internet.";
+    if(/invalid login credentials/i.test(m)) return "Usuario o clave incorrectos.";
+    if(/already registered|already been registered/i.test(m)) return "Ese nombre de usuario ya existe.";
+    return m;
+  }
+  function setBusy(button, busy, text){
+    if(!button) return;
+    button.disabled = busy;
+    button.style.opacity = busy ? ".6" : "1";
+    button.textContent = busy ? text : button.getAttribute("data-label");
+  }
 
   function renderCloud(){
     var host = document.getElementById("wt-cloud-body");
     if(!host) return;
+
+    // 1) Falta configurar el proyecto
     if(!cfg.url || !cfg.key){
       host.innerHTML =
         "<div style='font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;'>Peg\u00e1 los datos de tu proyecto de Supabase (Project Settings \u2192 API). Se guardan solo en este dispositivo.</div>" +
         "<input id='wt-sb-url' style=\""+INP+"\" placeholder='https://xxxx.supabase.co' value=\""+esc(cfg.url)+"\">" +
         "<input id='wt-sb-key' style=\""+INP+"\" placeholder='anon public key' value=\""+esc(cfg.key)+"\">" +
-        "<button id='wt-sb-save' style=\""+BTN+"width:100%;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Guardar conexi\u00f3n</button>";
+        "<button type='button' id='wt-sb-save' style=\""+BTN+"width:100%;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Guardar conexi\u00f3n</button>";
       document.getElementById("wt-sb-save").onclick = function(){
         cfg.url = normUrl(document.getElementById("wt-sb-url").value);
         cfg.key = document.getElementById("wt-sb-key").value.trim();
@@ -5924,66 +6046,50 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       };
       return;
     }
+
+    // 2) Sin sesion: entrar con usuario y clave
     if(!user){
       host.innerHTML =
-        "<div style='font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;'>Entr\u00e1 con tu email para ver los mismos datos en la PC y en el iPad.</div>" +
+        "<div style='font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;'>Entr\u00e1 con tu <b>usuario</b> y <b>clave</b>. Si sos entrenador vas a poder crear usuarios y enviarles entrenamientos.</div>" +
         "<div style='font-size:11px;color:var(--faint);margin-bottom:8px;font-family:ui-monospace,monospace;word-break:break-all;'>Proyecto: " + esc(cfg.url) + "</div>" +
         "<button type='button' id='wt-sb-test' style=\""+BTN+"width:100%;margin-bottom:8px;border:.5px solid var(--b2);background:transparent;color:var(--muted);\">\u2699 Probar conexi\u00f3n</button>" +
-        "<input id='wt-sb-mail' type='email' autocomplete='email' style=\""+INP+"\" placeholder='tu@email.com'>" +
-        "<input id='wt-sb-pass' type='password' autocomplete='current-password' style=\""+INP+"\" placeholder='contrase\u00f1a'>" +
+        "<input id='wt-sb-mail' type='text' autocapitalize='none' autocorrect='off' autocomplete='username' style=\""+INP+"\" placeholder='usuario (ej: academia-norte)'>" +
+        "<input id='wt-sb-pass' type='password' autocomplete='current-password' style=\""+INP+"\" placeholder='clave'>" +
         "<div style='display:flex;gap:8px;'>" +
-          "<button id='wt-sb-in' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">Entrar</button>" +
-          "<button id='wt-sb-up' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Crear cuenta</button>" +
+          "<button type='button' id='wt-sb-in' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">Entrar</button>" +
+          "<button type='button' id='wt-sb-up' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">Crear mi cuenta</button>" +
         "</div>" +
         "<div id='wt-auth-result' role='status' aria-live='polite' style='font-size:12px;line-height:1.45;margin-top:9px;min-height:18px;color:var(--faint);'></div>" +
         "<button type='button' id='wt-sb-forget' style=\""+BTN+"width:100%;margin-top:8px;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cambiar URL o clave del proyecto</button>";
-      var mail = function(){ return document.getElementById("wt-sb-mail").value.trim(); };
+
+      var nameOf = function(){ return document.getElementById("wt-sb-mail").value.trim(); };
       var pass = function(){ return document.getElementById("wt-sb-pass").value; };
       function authStatus(msg, color){
         status(msg, color);
         var el = document.getElementById("wt-auth-result");
         if(el){ el.textContent = msg; el.style.color = color || "var(--muted)"; }
       }
-      function withTimeout(promise){
-        return Promise.race([promise, new Promise(function(_, reject){
-          setTimeout(function(){ reject(new Error("La conexi\u00f3n tard\u00f3 demasiado. Revis\u00e1 la URL, la clave y tu internet.")); }, 15000);
-        })]);
-      }
-      function setBusy(button, busy, text){
-        button.disabled = busy;
-        button.style.opacity = busy ? ".6" : "1";
-        button.textContent = busy ? text : button.getAttribute("data-label");
-      }
-      function friendly(e){
-        var m = (e && e.message) ? e.message : String(e);
-        if(/failed to fetch|load failed|networkerror/i.test(m))
-          return "No hay conexi\u00f3n con el proyecto (" + cfg.url + "). Revis\u00e1 que la direcci\u00f3n sea la correcta (Project URL de Supabase) y que tengas internet.";
-        return m;
-      }
-      var testBtn = document.getElementById("wt-sb-test");
-      if(testBtn){
-        testBtn.addEventListener("click", function(ev){
-          ev.preventDefault();
-          authStatus("Probando " + cfg.url + " \u2026");
-          withTimeout(fetch(cfg.url + "/auth/v1/health", { headers: { apikey: cfg.key } })).then(function(r){
-            authStatus(r.ok || r.status === 401
-              ? "La direcci\u00f3n responde correctamente \u2713 Ya pod\u00e9s entrar."
-              : "El servidor respondi\u00f3 " + r.status + ". Revis\u00e1 la clave anon.",
-              (r.ok || r.status === 401) ? "var(--gt)" : "var(--rt)");
-          }).catch(function(e){ authStatus(friendly(e), "var(--rt)"); });
-        });
-      }
+      document.getElementById("wt-sb-test").addEventListener("click", function(ev){
+        ev.preventDefault();
+        authStatus("Probando " + cfg.url + " \u2026");
+        withTimeout(fetch(cfg.url + "/auth/v1/health", { headers: { apikey: cfg.key } })).then(function(r){
+          authStatus((r.ok || r.status === 401)
+            ? "La direcci\u00f3n responde correctamente \u2713 Ya pod\u00e9s entrar."
+            : "El servidor respondi\u00f3 " + r.status + ". Revis\u00e1 la clave anon.",
+            (r.ok || r.status === 401) ? "var(--gt)" : "var(--rt)");
+        }).catch(function(e){ authStatus(friendly(e), "var(--rt)"); });
+      });
+
       var inBtn = document.getElementById("wt-sb-in");
       var upBtn = document.getElementById("wt-sb-up");
       inBtn.setAttribute("data-label", "Entrar");
-      upBtn.setAttribute("data-label", "Crear cuenta");
+      upBtn.setAttribute("data-label", "Crear mi cuenta");
       inBtn.addEventListener("click", function(ev){
         ev.preventDefault();
-        var c = needClient();
-        if(!c){ authStatus("No se pudo iniciar la conexi\u00f3n. Toc\u00e1 Cambiar proyecto y revis\u00e1 URL y clave.", "var(--rt)"); return; }
-        if(!mail() || !pass()){ authStatus("Complet\u00e1 email y contrase\u00f1a.", "var(--rt)"); return; }
+        var c = needClient(); if(!c){ authStatus("No se pudo iniciar la conexi\u00f3n.", "var(--rt)"); return; }
+        if(!nameOf() || !pass()){ authStatus("Complet\u00e1 usuario y clave.", "var(--rt)"); return; }
         setBusy(inBtn, true, "Entrando\u2026"); authStatus("Entrando\u2026");
-        withTimeout(c.auth.signInWithPassword({ email: mail(), password: pass() })).then(function(r){
+        withTimeout(c.auth.signInWithPassword({ email: userToEmail(nameOf()), password: pass() })).then(function(r){
           if(r.error) throw r.error;
           authStatus("Sesi\u00f3n iniciada correctamente.", "var(--gt)");
         }).catch(function(e){ authStatus("No se pudo entrar: " + friendly(e), "var(--rt)"); })
@@ -5991,15 +6097,14 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       });
       upBtn.addEventListener("click", function(ev){
         ev.preventDefault();
-        var email = mail(), password = pass();
-        if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || password.length < 6){ authStatus("Ingres\u00e1 un email v\u00e1lido y una contrase\u00f1a de 6+ caracteres.", "var(--rt)"); return; }
-        var c = needClient();
-        if(!c){ authStatus("No se pudo iniciar la conexi\u00f3n. Toc\u00e1 Cambiar proyecto y revis\u00e1 URL y clave.", "var(--rt)"); return; }
-        setBusy(upBtn, true, "Creando\u2026"); authStatus("Creando cuenta\u2026 No cierres esta pantalla.");
-        withTimeout(c.auth.signUp({ email: email, password: password, options: { emailRedirectTo: location.origin + location.pathname } })).then(function(r){
+        var name = nameOf(), password = pass();
+        if(name.length < 3 || password.length < 6){ authStatus("Usuario de 3+ letras y clave de 6+ caracteres.", "var(--rt)"); return; }
+        var c = needClient(); if(!c){ authStatus("No se pudo iniciar la conexi\u00f3n.", "var(--rt)"); return; }
+        setBusy(upBtn, true, "Creando\u2026"); authStatus("Creando cuenta\u2026");
+        withTimeout(c.auth.signUp({ email: userToEmail(name), password: password })).then(function(r){
           if(r.error) throw r.error;
-          if(r.data && r.data.session) authStatus("Cuenta creada y conectada correctamente \u2713", "var(--gt)");
-          else authStatus("Cuenta creada. Revis\u00e1 tu email y toc\u00e1 el enlace de confirmaci\u00f3n; despu\u00e9s volv\u00e9 y toc\u00e1 Entrar.", "var(--at)");
+          if(r.data && r.data.session) authStatus("Cuenta creada y conectada \u2713", "var(--gt)");
+          else authStatus("Cuenta creada. Toc\u00e1 Entrar. (Si pide confirmaci\u00f3n, desactiv\u00e1 \u2018Confirm email\u2019 en Supabase \u2192 Authentication.)", "var(--at)");
         }).catch(function(e){ authStatus("No se pudo crear: " + friendly(e), "var(--rt)"); })
           .then(function(){ setBusy(upBtn, false); });
       });
@@ -6015,33 +6120,70 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       };
       return;
     }
-    host.innerHTML =
-      "<div style='font-size:12px;color:var(--gt);margin-bottom:4px;'>\u2713 Conectado como " + esc(user.email||"") + "</div>" +
-      "<div style='display:flex;gap:8px;margin-bottom:8px;'>" +
-        "<button id='wt-sb-push' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">\u2191 Subir ahora</button>" +
-        "<button id='wt-sb-pullb' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">\u2193 Bajar ahora</button>" +
-      "</div>" +
-      "<button id='wt-sb-diag' style=\""+BTN+"width:100%;margin-bottom:8px;border:.5px solid var(--b2);background:transparent;color:var(--muted);\">\u2139 Diagn\u00f3stico de la nube</button>" +
+
+    // 3) Sesion iniciada
+    var uname = esc(emailToUser(user.email||""));
+    var html =
+      "<div style='font-size:12px;color:var(--gt);margin-bottom:8px;'>\u2713 Conectado como <b>" + uname + "</b> \u00b7 " +
+        (role === "member" ? "usuario de entrenamiento" : "entrenador") + "</div>";
+
+    if(role === "member"){
+      html +=
+        "<button type='button' id='wt-sb-recv' style=\""+BTN+"width:100%;margin-bottom:8px;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">\u2193 Recibir entrenamiento</button>" +
+        "<div style='font-size:11px;color:var(--faint);line-height:1.5;margin-bottom:8px;'>Tu entrenador te env\u00eda los entrenamientos. Tus tiempos se guardan en tu cuenta.</div>";
+    }else{
+      html +=
+        "<div style='display:flex;gap:8px;margin-bottom:8px;'>" +
+          "<button type='button' id='wt-sb-push' style=\""+BTN+"flex:1;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">\u2191 Subir ahora</button>" +
+          "<button type='button' id='wt-sb-pullb' style=\""+BTN+"flex:1;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">\u2193 Bajar ahora</button>" +
+        "</div>" +
+        "<div class='slbl' style='margin-top:14px;'>\u{1F465} Usuarios / academias</div>" +
+        "<div id='wt-mem-list' style='margin-bottom:8px;'></div>" +
+        "<input id='wt-mem-user' type='text' autocapitalize='none' autocorrect='off' style=\""+INP+"\" placeholder='nuevo usuario (ej: academia-norte)'>" +
+        "<input id='wt-mem-pass' type='text' style=\""+INP+"\" placeholder='clave para ese usuario (6+)'>" +
+        "<button type='button' id='wt-mem-add' style=\""+BTN+"width:100%;margin-bottom:8px;border:.5px solid var(--bb);background:var(--bd);color:var(--bt);\">+ Crear usuario</button>" +
+        "<div id='wt-mem-msg' style='font-size:12px;line-height:1.45;min-height:16px;color:var(--faint);margin-bottom:8px;'></div>";
+    }
+
+    html +=
+      "<button type='button' id='wt-sb-diag' style=\""+BTN+"width:100%;margin-bottom:8px;border:.5px solid var(--b2);background:transparent;color:var(--muted);\">\u2139 Diagn\u00f3stico de la nube</button>" +
       "<pre id='wt-sb-diagout' style='white-space:pre-wrap;font-size:10px;line-height:1.4;color:var(--muted);margin:0 0 8px;font-family:ui-monospace,monospace;'></pre>" +
-      "<button id='wt-sb-out' style=\""+BTN+"width:100%;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cerrar sesi\u00f3n</button>";
-    document.getElementById("wt-sb-push").onclick = function(){
-      CLOUD_KEYS.forEach(function(k){ if(LS.getItem(k) !== null) _set(mtimeKey(k), Date.now().toString()); });
-      push();
-    };
-    document.getElementById("wt-sb-pullb").onclick = function(){
-      CLOUD_KEYS.forEach(function(k){ _set(mtimeKey(k), "0"); });
-      pull();
-    };
+      "<button type='button' id='wt-sb-out' style=\""+BTN+"width:100%;border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Cerrar sesi\u00f3n</button>";
+
+    host.innerHTML = html;
+
+    if(role === "member"){
+      document.getElementById("wt-sb-recv").onclick = function(){
+        status("Buscando entrenamiento\u2026");
+        pullShared();
+      };
+    }else{
+      document.getElementById("wt-sb-push").onclick = function(){
+        CLOUD_KEYS.forEach(function(k){ if(LS.getItem(k) !== null) _set(mtimeKey(k), Date.now().toString()); });
+        push();
+      };
+      document.getElementById("wt-sb-pullb").onclick = function(){
+        CLOUD_KEYS.forEach(function(k){ _set(mtimeKey(k), "0"); });
+        pull();
+      };
+      renderMembers();
+      document.getElementById("wt-mem-add").onclick = createMember;
+    }
+
     document.getElementById("wt-sb-diag").onclick = function(){
       var c = needClient(); if(!c) return;
       var out = document.getElementById("wt-sb-diagout");
       out.textContent = "Consultando la nube\u2026";
-      c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id).then(function(res){
+      var table = (role === "member") ? "wt_share" : "wt_state";
+      var q = (role === "member")
+        ? c.from("wt_share").select("key,value,updated_at").eq("target_id", user.id)
+        : c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id);
+      q.then(function(res){
         if(res.error){ out.textContent = "Error: " + res.error.message; return; }
         var rows = res.data || [];
-        var txt = "Cuenta: " + (user.email||"") + "\nID: " + user.id.slice(0,8) + "\u2026\n";
-        txt += "Filas en la nube: " + rows.length + "\n\n";
-        CLOUD_KEYS.forEach(function(k){
+        var txt = "Usuario: " + emailToUser(user.email||"") + " (" + role + ")\nID: " + user.id.slice(0,8) + "\u2026\n";
+        txt += "Tabla: " + table + " \u00b7 filas: " + rows.length + "\n\n";
+        (role === "member" ? TRAINING_KEYS : CLOUD_KEYS).forEach(function(k){
           var r = null;
           rows.forEach(function(x){ if(x.key===k) r = x; });
           var loc = LS.getItem(k);
@@ -6054,8 +6196,87 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     document.getElementById("wt-sb-out").onclick = function(){
       if(!confirm("\u00bfCerrar sesi\u00f3n? Los datos siguen en este dispositivo y en la nube.")) return;
       var c = needClient(); if(!c) return;
-      c.auth.signOut().then(function(){ user = null; renderCloud(); });
+      c.auth.signOut().then(function(){ user = null; myDir = null; members = []; role = "coach"; renderCloud(); });
     };
+  }
+
+  function memMsg(msg, color){
+    var el = document.getElementById("wt-mem-msg");
+    if(el){ el.textContent = msg; el.style.color = color || "var(--muted)"; }
+  }
+
+  function renderMembers(){
+    var box = document.getElementById("wt-mem-list");
+    if(!box) return;
+    if(!members.length){
+      box.innerHTML = "<div style='font-size:12px;color:var(--faint);line-height:1.5;'>Todav\u00eda no creaste usuarios. Cre\u00e1 uno abajo y pasale el nombre y la clave.</div>";
+      return;
+    }
+    box.innerHTML = members.map(function(m, i){
+      return "<div style='border:.5px solid var(--b2);border-radius:var(--rs);padding:8px 10px;margin-bottom:6px;'>" +
+        "<div style='font-size:13px;color:var(--text);margin-bottom:6px;'>" + esc(m.username) + "</div>" +
+        "<div style='display:flex;gap:6px;flex-wrap:wrap;'>" +
+          "<button type='button' data-i='" + i + "' class='wt-mem-send' style=\""+BTN+"flex:1;min-width:130px;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);\">\u2191 Enviar entrenamiento</button>" +
+          "<button type='button' data-i='" + i + "' class='wt-mem-del' style=\""+BTN+"border:.5px solid var(--b2);background:transparent;color:var(--faint);\">Quitar</button>" +
+        "</div></div>";
+    }).join("");
+    Array.prototype.forEach.call(box.querySelectorAll(".wt-mem-send"), function(b){
+      b.onclick = function(){
+        var m = members[parseInt(b.getAttribute("data-i"),10)];
+        if(!confirm("Enviar el entrenamiento actual a " + m.username + "?")) return;
+        b.setAttribute("data-label","\u2191 Enviar entrenamiento");
+        setBusy(b, true, "Enviando\u2026");
+        sendToMember(m, TRAINING_KEYS).then(function(){
+          setBusy(b, false);
+          memMsg("Entrenamiento enviado a " + m.username + " \u2713", "var(--gt)");
+        });
+      };
+    });
+    Array.prototype.forEach.call(box.querySelectorAll(".wt-mem-del"), function(b){
+      b.onclick = function(){
+        var m = members[parseInt(b.getAttribute("data-i"),10)];
+        if(!confirm("Quitar a " + m.username + " de tu lista? Dejar\u00e1 de recibir tus entrenamientos.")) return;
+        var c = needClient(); if(!c) return;
+        c.from("wt_share").delete().eq("target_id", m.id).eq("coach_id", user.id).then(function(){
+          return c.from("wt_users_dir").delete().eq("id", m.id).eq("coach_id", user.id);
+        }).then(function(){ return loadMembers(); }).then(function(){
+          renderMembers(); memMsg("Usuario quitado.", "var(--muted)");
+        });
+      };
+    });
+  }
+
+  function createMember(){
+    var btn = document.getElementById("wt-mem-add");
+    var name = (document.getElementById("wt-mem-user").value||"").trim().toLowerCase().replace(/\s+/g,"-");
+    var pw = document.getElementById("wt-mem-pass").value || "";
+    if(name.length < 3 || pw.length < 6){ memMsg("Usuario de 3+ letras y clave de 6+ caracteres.", "var(--rt)"); return; }
+    if(!window.supabase || !window.supabase.createClient){ memMsg("No se pudo cargar la librer\u00eda de la nube.", "var(--rt)"); return; }
+    btn.setAttribute("data-label","+ Crear usuario");
+    setBusy(btn, true, "Creando\u2026"); memMsg("Creando usuario\u2026");
+    // Cliente temporal: crea la cuenta sin cerrar tu sesion de entrenador
+    var tmp = window.supabase.createClient(cfg.url, cfg.key, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "wt-sb-tmp" }
+    });
+    withTimeout(tmp.auth.signUp({ email: userToEmail(name), password: pw })).then(function(r){
+      if(r.error) throw r.error;
+      var id = r.data && r.data.user && r.data.user.id;
+      if(!id) throw new Error("No se pudo crear. Desactiv\u00e1 \u2018Confirm email\u2019 en Supabase \u2192 Authentication \u2192 Providers \u2192 Email.");
+      var c = needClient();
+      return c.from("wt_users_dir").upsert(
+        { id: id, username: name, coach_id: user.id }, { onConflict: "id" }
+      ).then(function(res){
+        if(res.error) throw res.error;
+        return loadMembers();
+      });
+    }).then(function(){
+      document.getElementById("wt-mem-user").value = "";
+      document.getElementById("wt-mem-pass").value = "";
+      renderMembers();
+      memMsg("Usuario \u201c" + name + "\u201d creado \u2713 Pasale el nombre y la clave.", "var(--gt)");
+    }).catch(function(e){
+      memMsg("No se pudo crear: " + friendly(e), "var(--rt)");
+    }).then(function(){ setBusy(btn, false); });
   }
 
   function mount(){
@@ -6063,7 +6284,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     if(!cfgView || document.getElementById("wt-cloud-body")) return;
     var box = document.createElement("div");
     box.innerHTML =
-      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 mismos datos en todos tus equipos <span style='opacity:.5;font-weight:400;'>(v15)</span></div>" +
+      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 usuarios y entrenamientos compartidos <span style='opacity:.5;font-weight:400;'>(v16)</span></div>" +
       "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
         "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:8px;min-height:14px;'></div>" +
         "<div id='wt-cloud-body'></div>" +
@@ -6075,6 +6296,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
   function start(){ mount(); boot(); }
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", function(){ setTimeout(function(){ try{ restoreTab(); }catch(e){} start(); }, 300); });
   else setTimeout(function(){ try{ restoreTab(); }catch(e){} start(); }, 300);
+
 })();
 </script>
 
