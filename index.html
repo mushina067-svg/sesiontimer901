@@ -2531,7 +2531,14 @@ function importProfiles(file){
 
 // ── HISTORY ───────────────────────────────────────────────────────
 function getHist(){try{return JSON.parse(localStorage.getItem("swim-v6")||"[]");}catch(e){return[];}}
-function saveHist(h){try{localStorage.setItem("swim-v6",JSON.stringify(h));}catch(e){}}
+function getHistDel(){try{var a=JSON.parse(localStorage.getItem("wt-hist-del")||"[]");return Array.isArray(a)?a.map(String):[];}catch(e){return[];}}
+function saveHist(h){try{
+  var prev=getHist(), keep={}, del=getHistDel(), added=false;
+  (h||[]).forEach(function(s){if(s&&s.id!=null)keep[String(s.id)]=1;});
+  prev.forEach(function(s){var k=s&&s.id!=null?String(s.id):null;if(k&&!keep[k]&&del.indexOf(k)<0){del.push(k);added=true;}});
+  if(added){if(del.length>800)del=del.slice(-800);localStorage.setItem("wt-hist-del",JSON.stringify(del));}
+  localStorage.setItem("swim-v6",JSON.stringify(h));
+}catch(e){}}
 function updateHistTab(n){document.getElementById("tab-history").textContent="Historial"+(n>0?" ("+n+")":"");}
 var _histMode="calendar"; // "list" | "calendar"
 
@@ -5506,7 +5513,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
   })();
 
   // 4) AVISO DE ESPACIO — localStorage se llena cerca de los 5 MB
-  var WT_KEYS = ["swim-v6","swim-profiles","swim-templates","swim-sessions-draft","wt-bt-offset","wt-race-mode"];
+  var WT_KEYS = ["wt-hist-del","swim-v6","swim-profiles","swim-templates","swim-sessions-draft","wt-bt-offset","wt-race-mode"];
   function usedBytes(){
     var n = 0;
     for(var i=0;i<localStorage.length;i++){
@@ -5730,7 +5737,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
 <script>
 (function(){
   "use strict";
-  var CLOUD_KEYS = ["swim-v6","swim-profiles","swim-templates","swim-sessions-draft","wt-bt-offset","wt-race-mode"];
+  var CLOUD_KEYS = ["wt-hist-del","swim-v6","swim-profiles","swim-templates","swim-sessions-draft","wt-bt-offset","wt-race-mode"];
   var LS = window.localStorage;
   function normUrl(u){
     u = (u||"").trim();
@@ -5794,18 +5801,59 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     return t === "" || t === "[]" || t === "{}" || t === "null" || t === "0";
   }
 
+  // ── Fusion del historial: nunca se pierde una sesion de otro dispositivo ──
+  var MERGE_KEYS = ["wt-hist-del","swim-v6"];
+  function parseArr(v){ try{ var a = JSON.parse(v||"[]"); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+  function mergeDel(a, b){
+    var out = [], seen = {};
+    parseArr(a).concat(parseArr(b)).forEach(function(id){
+      var k = String(id);
+      if(!seen[k]){ seen[k] = 1; out.push(k); }
+    });
+    if(out.length > 800) out = out.slice(-800);
+    return JSON.stringify(out);
+  }
+  function mergeHist(a, b){
+    var del = {};
+    parseArr(LS.getItem("wt-hist-del")).forEach(function(id){ del[String(id)] = 1; });
+    var map = {}, out = [];
+    parseArr(a).concat(parseArr(b)).forEach(function(sess){
+      if(!sess || sess.id == null) return;
+      var k = String(sess.id);
+      if(del[k] || map[k]) return;
+      map[k] = 1; out.push(sess);
+    });
+    out.sort(function(x, y){ return (Number(y.id)||0) - (Number(x.id)||0); });
+    return JSON.stringify(out);
+  }
+  function mergeKey(k, localVal, remoteVal){
+    return k === "swim-v6" ? mergeHist(localVal, remoteVal) : mergeDel(localVal, remoteVal);
+  }
+
   function push(silent){
     var c = client();
     if(!c || !user) return Promise.resolve();
     if(!silent) status("Subiendo\u2026");
-    // La modificaci\u00f3n m\u00e1s reciente gana; [] es un borrado intencional y tambi\u00e9n se sincroniza.
     return c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id).then(function(pre){
       var remote = {};
       if(!pre.error) (pre.data||[]).forEach(function(r){ remote[r.key] = r; });
       var adopted = [];
       var rows = [];
       applying = true;
+      // Primero las claves que se fusionan (borrados + historial)
+      MERGE_KEYS.forEach(function(k){
+        var r = remote[k];
+        var local = LS.getItem(k);
+        if(local === null && !r) return;
+        var merged = mergeKey(k, local, r ? r.value : null);
+        if(merged !== local){ _set(k, merged); adopted.push(k); }
+        _set(mtimeKey(k), Date.now().toString());
+        if(!r || r.value !== merged){
+          rows.push({ user_id: user.id, key: k, value: merged, updated_at: new Date().toISOString() });
+        }
+      });
       CLOUD_KEYS.forEach(function(k){
+        if(MERGE_KEYS.indexOf(k) >= 0) return;
         var local = LS.getItem(k);
         if(local === null) return;
         var r = remote[k];
@@ -5847,17 +5895,32 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     if(!silent) status("Bajando\u2026");
     return c.from("wt_state").select("key,value,updated_at").eq("user_id", user.id).then(function(res){
       if(res.error){ status("Error al bajar: " + res.error.message, "var(--rt)"); return false; }
-      var changed = false;
+      var remote = {};
+      (res.data||[]).forEach(function(r){ remote[r.key] = r; });
+      var changed = false, needPush = false;
       applying = true;
-      (res.data||[]).forEach(function(row){
-        if(CLOUD_KEYS.indexOf(row.key) < 0) return;
+      // Historial y borrados: se fusionan (no se pisan)
+      MERGE_KEYS.forEach(function(k){
+        var r = remote[k];
+        var local = LS.getItem(k);
+        if(local === null && !r) return;
+        var merged = mergeKey(k, local, r ? r.value : null);
+        if(merged !== local){
+          _set(k, merged);
+          _set(mtimeKey(k), Date.now().toString());
+          changed = true;
+        }
+        if(!r || r.value !== merged) needPush = true;
+      });
+      CLOUD_KEYS.forEach(function(k){
+        if(MERGE_KEYS.indexOf(k) >= 0) return;
+        var row = remote[k];
+        if(!row) return;
         var remoteT = new Date(row.updated_at).getTime();
-        var localVal = LS.getItem(row.key);
-        var winsByTime = remoteT > localMtime(row.key);
-        // Acepta tambi\u00e9n un valor vac\u00edo nuevo para propagar borrados.
-        if(winsByTime && row.value !== localVal){
-          _set(row.key, row.value);
-          _set(mtimeKey(row.key), remoteT.toString());
+        var localVal = LS.getItem(k);
+        if(remoteT > localMtime(k) && row.value !== localVal){
+          _set(k, row.value);
+          _set(mtimeKey(k), remoteT.toString());
           changed = true;
         }
       });
@@ -5869,6 +5932,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       }else{
         status("Bajada completa \u2713 sin cambios \u00b7 " + new Date().toLocaleTimeString(), "var(--gt)");
       }
+      if(needPush) setTimeout(function(){ push(true); }, 200);
       return changed;
     });
   }
@@ -6000,6 +6064,14 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     }
   });
   window.addEventListener("online", function(){ if(user && role !== "member") push(true); });
+
+  // Sube en el acto al cerrar o mandar la app al fondo (clave en iPad)
+  function flushNow(){ try{ clearTimeout(pushTimer); if(user) push(true); }catch(e){} }
+  window.wtCloudFlush = flushNow;
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "hidden") flushNow();
+  });
+  window.addEventListener("pagehide", flushNow);
 
   // ── Interfaz en Config ───────────────────────────────────────────
   function esc(s){ return String(s==null?"":s).replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
@@ -6284,7 +6356,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     if(!cfgView || document.getElementById("wt-cloud-body")) return;
     var box = document.createElement("div");
     box.innerHTML =
-      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 usuarios y entrenamientos compartidos <span style='opacity:.5;font-weight:400;'>(v16)</span></div>" +
+      "<div class='slbl' style='margin-top:18px;'>\u2601 Nube \u2014 usuarios y entrenamientos compartidos <span style='opacity:.5;font-weight:400;'>(v19)</span></div>" +
       "<div style='background:var(--surf);border-radius:var(--r);border:.5px solid var(--b1);padding:12px 14px;margin-bottom:10px;'>" +
         "<div id='wt-cloud-status' style='font-size:11px;color:var(--faint);margin-bottom:8px;min-height:14px;'></div>" +
         "<div id='wt-cloud-body'></div>" +
