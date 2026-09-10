@@ -940,7 +940,7 @@ function buildManualPanelHTML(swid){
         +'<div class="mb-field"><label>Reps</label><input type="number" id="mb-reps-'+swid+'-'+sec+'-'+idx+'" value="4" min="1" max="50"></div>'
         +'<div class="mb-field"><label>Distancia</label><select id="mb-dist-'+swid+'-'+sec+'-'+idx+'">'+distOpts+'</select></div>'
         +'<div class="mb-field"><label>%</label><input type="number" id="mb-pct-'+swid+'-'+sec+'-'+idx+'" placeholder="88" min="50" max="100"></div>'
-        +'<div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+swid+'-'+sec+'-'+idx+'" placeholder="1:06.50"></div>'
+        +'<div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+swid+'-'+sec+'-'+idx+'" placeholder="1:06.50"></div>'+'<div class="mb-field" style="flex:0 0 46px"><label>S/T</label><input type="checkbox" id="mb-notime-'+swid+'-'+sec+'-'+idx+'" title="Sin tiempo" style="width:18px;height:18px;margin-top:6px;accent-color:#1a6fb5;"></div>'
         +'<div class="mb-field"><label>Desc/rep</label><input type="text" id="mb-rest-'+swid+'-'+sec+'-'+idx+'" placeholder="90s"></div>'
       +'</div>'
       +'<div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;background:var(--surf2);border-radius:4px;border:.5px dashed var(--bb);">'
@@ -1008,7 +1008,7 @@ function addSub(swid,sec){
     +'<div class="mb-field"><label>Reps</label><input type="number" id="mb-reps-'+swid+'-'+sec+'-'+idx+'" value="4" min="1" max="50"></div>'
     +'<div class="mb-field"><label>Distancia</label><select id="mb-dist-'+swid+'-'+sec+'-'+idx+'">'+distOpts+'</select></div>'
     +'<div class="mb-field"><label>%</label><input type="number" id="mb-pct-'+swid+'-'+sec+'-'+idx+'" placeholder="88" min="50" max="100"></div>'
-    +'<div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+swid+'-'+sec+'-'+idx+'" placeholder="1:06.50"></div>'
+    +'<div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+swid+'-'+sec+'-'+idx+'" placeholder="1:06.50"></div>'+'<div class="mb-field" style="flex:0 0 46px"><label>S/T</label><input type="checkbox" id="mb-notime-'+swid+'-'+sec+'-'+idx+'" title="Sin tiempo" style="width:18px;height:18px;margin-top:6px;accent-color:#1a6fb5;"></div>'
     +'<div class="mb-field"><label>Desc/rep</label><input type="text" id="mb-rest-'+swid+'-'+sec+'-'+idx+'" placeholder="90s"></div>'
   +'</div>'
   +'<div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;background:var(--surf2);border-radius:4px;border:.5px dashed var(--bb);">'
@@ -1035,6 +1035,26 @@ function wireCalcSub(swid,sec,idx){
   var distEl=document.getElementById("mb-dist-"+swid+"-"+sec+"-"+idx);
   if(pctEl){pctEl.addEventListener("input",function(){calcTime(swid,sec,idx);});}
   if(distEl){distEl.addEventListener("change",function(){calcTime(swid,sec,idx);});}
+  wireNoTime(swid,sec,idx);
+}
+
+// ── S/T (sin tiempo) ─────────────────────────────────────────────
+function wireNoTime(swid,sec,idx){
+  var cb=document.getElementById("mb-notime-"+swid+"-"+sec+"-"+idx);
+  if(!cb)return;
+  function apply(){
+    var t=document.getElementById("mb-time-"+swid+"-"+sec+"-"+idx);
+    var p=document.getElementById("mb-pct-"+swid+"-"+sec+"-"+idx);
+    if(cb.checked){
+      if(t){t.value="";t.disabled=true;t.placeholder="S/T";t.style.color="var(--faint)";}
+      if(p){p.value="";p.disabled=true;p.style.color="var(--faint)";}
+    }else{
+      if(t){t.disabled=false;t.placeholder="1:06.50";t.style.color="";}
+      if(p){p.disabled=false;p.style.color="";}
+    }
+  }
+  cb.addEventListener("change",apply);
+  apply();
 }
 
 function calcTime(swid,sec,idx){
@@ -1042,6 +1062,8 @@ function calcTime(swid,sec,idx){
   var distEl=document.getElementById("mb-dist-"+swid+"-"+sec+"-"+idx);
   var timeEl=document.getElementById("mb-time-"+swid+"-"+sec+"-"+idx);
   if(!pctEl||!distEl||!timeEl)return;
+  var ntEl=document.getElementById("mb-notime-"+swid+"-"+sec+"-"+idx);
+  if(ntEl&&ntEl.checked){timeEl.value="";return;}
   var pct=parseFloat(pctEl.value);
   var dist=distEl.value;
   if(!pct||pct<=0)return;
@@ -1072,11 +1094,14 @@ function collectSubs(swid,sec,blockType){
     var timeStr=g("mb-time-"+swid+"-"+sec+"-"+i);
     var restStr=g("mb-rest-"+swid+"-"+sec+"-"+i);
     var subRestStr=g("mb-subrest-"+swid+"-"+sec+"-"+i);
+    var ntEl=document.getElementById("mb-notime-"+swid+"-"+sec+"-"+i);
+    var noTime=!!(ntEl&&ntEl.checked);
     var targetMs=parseTimeStr(timeStr);
     var restSec=parseDur(restStr);
     var subRestSec=parseDur(subRestStr);
-    if(!targetMs&&pct>0){var refMs=getRef(swimmers.find(function(s){return s.id===swid;})||{name:""},dist);if(refMs>0)targetMs=Math.round(refMs/(pct/100));}
-    blocks.push({type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,note:desc});
+    if(noTime){targetMs=0;pct=0;}
+    if(!noTime&&!targetMs&&pct>0){var refMs=getRef(swimmers.find(function(s){return s.id===swid;})||{name:""},dist);if(refMs>0)targetMs=Math.round(refMs/(pct/100));}
+    blocks.push({type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,noTime:noTime,note:desc});
     if(subRestSec>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:subRestSec,isTransition:true});
   });
   return blocks;
@@ -1186,7 +1211,7 @@ function openManualEdit(id){
         +'<div class="mb-field"><label>Reps</label><input type="number" id="mb-reps-'+id+'-'+sec+'-'+i+'" value="'+b.reps+'" min="1" max="50"></div>'
         +'<div class="mb-field"><label>Distancia</label><select id="mb-dist-'+id+'-'+sec+'-'+i+'">'+distOpts+'</select></div>'
         +'<div class="mb-field"><label>%</label><input type="number" id="mb-pct-'+id+'-'+sec+'-'+i+'" placeholder="88" min="50" max="100" value="'+(b.intensity>0?b.intensity:'')+'" ></div>'
-        +'<div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+id+'-'+sec+'-'+i+'" placeholder="1:06.50" value="'+(b.targetMs>0?fmtTime(b.targetMs):'')+'" ></div>'
+        +'<div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+id+'-'+sec+'-'+i+'" placeholder="1:06.50" value="'+(b.targetMs>0?fmtTime(b.targetMs):'')+'" ></div>'+'<div class="mb-field" style="flex:0 0 46px"><label>S/T</label><input type="checkbox" id="mb-notime-'+id+'-'+sec+'-'+i+'" title="Sin tiempo"'+(b.noTime?' checked':'')+' style="width:18px;height:18px;margin-top:6px;accent-color:#1a6fb5;"></div>'
         +'<div class="mb-field"><label>Desc/rep</label><input type="text" id="mb-rest-'+id+'-'+sec+'-'+i+'" placeholder="90s" value="'+(b.restSec>0?fmtSec(b.restSec):'')+'" ></div>'
       +'</div>'
       +'<div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;background:var(--surf2);border-radius:4px;border:.5px dashed var(--bb);">'
@@ -1213,7 +1238,7 @@ function openManualEdit(id){
     if(subsInSec.length===0){
       var distOpts2=MB_DISTS.map(function(d){return'<option value="'+d+'">'+d+'</option>';}).join('');
       var div2=document.createElement("div");div2.className="mb-sub";div2.id="mbsub-"+id+"-"+sec+"-0";
-      div2.innerHTML='<div class="mb-desc-row"><input type="text" class="mb-desc-input" id="mb-desc-'+id+'-'+sec+'-0" placeholder="ej: 8×100 libre 1:06.50"><button class="btn-del" data-action="del-sub" data-swid="'+id+'" data-sec="'+sec+'" data-idx="0">×</button></div><div class="mb-fields-row"><div class="mb-field"><label>Reps</label><input type="number" id="mb-reps-'+id+'-'+sec+'-0" value="4" min="1" max="50"></div><div class="mb-field"><label>Distancia</label><select id="mb-dist-'+id+'-'+sec+'-0">'+distOpts2+'</select></div><div class="mb-field"><label>%</label><input type="number" id="mb-pct-'+id+'-'+sec+'-0" placeholder="88" min="50" max="100"></div><div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+id+'-'+sec+'-0" placeholder="1:06.50"></div><div class="mb-field"><label>Desc/rep</label><input type="text" id="mb-rest-'+id+'-'+sec+'-0" placeholder="90s"></div></div><div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;background:var(--surf2);border-radius:4px;border:.5px dashed var(--bb);"><span style="font-size:10px;color:var(--bt);white-space:nowrap;">↕ Desc. entre sub-bloques:</span><input type="text" id="mb-subrest-'+id+'-'+sec+'-0" placeholder="ej: 2 min" style="flex:1;padding:4px 8px;border-radius:4px;border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:12px;font-family:var(--mono);"></div>';
+      div2.innerHTML='<div class="mb-desc-row"><input type="text" class="mb-desc-input" id="mb-desc-'+id+'-'+sec+'-0" placeholder="ej: 8×100 libre 1:06.50"><button class="btn-del" data-action="del-sub" data-swid="'+id+'" data-sec="'+sec+'" data-idx="0">×</button></div><div class="mb-fields-row"><div class="mb-field"><label>Reps</label><input type="number" id="mb-reps-'+id+'-'+sec+'-0" value="4" min="1" max="50"></div><div class="mb-field"><label>Distancia</label><select id="mb-dist-'+id+'-'+sec+'-0">'+distOpts2+'</select></div><div class="mb-field"><label>%</label><input type="number" id="mb-pct-'+id+'-'+sec+'-0" placeholder="88" min="50" max="100"></div><div class="mb-field"><label>Tiempo</label><input type="text" id="mb-time-'+id+'-'+sec+'-0" placeholder="1:06.50"></div><div class="mb-field" style="flex:0 0 46px"><label>S/T</label><input type="checkbox" id="mb-notime-'+id+'-'+sec+'-0" title="Sin tiempo" style="width:18px;height:18px;margin-top:6px;accent-color:#1a6fb5;"></div><div class="mb-field"><label>Desc/rep</label><input type="text" id="mb-rest-'+id+'-'+sec+'-0" placeholder="90s"></div></div><div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;background:var(--surf2);border-radius:4px;border:.5px dashed var(--bb);"><span style="font-size:10px;color:var(--bt);white-space:nowrap;">↕ Desc. entre sub-bloques:</span><input type="text" id="mb-subrest-'+id+'-'+sec+'-0" placeholder="ej: 2 min" style="flex:1;padding:4px 8px;border-radius:4px;border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:12px;font-family:var(--mono);"></div>';
       cont.appendChild(div2);
       div2.querySelector("[data-action='del-sub']").addEventListener("click",function(){div2.remove();});
       wireCalcSub(id,sec,0);
@@ -1277,7 +1302,8 @@ function loadJSON(id){
 function applyBlocks(sw,blocks){
   sw.blocks=blocks.map(function(b){
     b.id=uid();b.completedReps=[];
-    if(!b.targetMs&&b.intensity>0){var ref=getRef(sw.name,b.distKey||b.distance||"");if(ref>0)b.targetMs=Math.round(ref/(b.intensity/100));}
+    if(b.noTime){b.targetMs=0;b.intensity=0;}
+    if(!b.noTime&&!b.targetMs&&b.intensity>0){var ref=getRef(sw.name,b.distKey||b.distance||"");if(ref>0)b.targetMs=Math.round(ref/(b.intensity/100));}
     return b;
   });
   sw.state="idle";sw.curBlock=0;sw.curRep=0;sw.phase="idle";sw.doneBlocks=[];
@@ -2161,10 +2187,11 @@ function renderMP(s){
   document.getElementById("mp-inner").style.display="flex";
   document.getElementById("mp-name").textContent=s.name;
   var b=curBlock(s);
-  var blockLbl=b?(b.isTransition?b.name:(b.note&&b.note.trim()&&b.note!==b.name?b.note+" · ":"")+b.reps+"×"+b.distance+(b.intensity>0?" al "+b.intensity+"%":"")):"";
+  var blockLbl=b?(b.isTransition?b.name:(b.note&&b.note.trim()&&b.note!==b.name?b.note+" · ":"")+b.reps+"×"+b.distance+(b.noTime?" · S/T":(b.intensity>0?" al "+b.intensity+"%":""))):"";
   document.getElementById("mp-block").textContent=blockLbl;
   var phase=document.getElementById("mp-phase"),timeEl=document.getElementById("mp-time"),repInfo=document.getElementById("mp-repinfo"),tgt=document.getElementById("mp-tgt");
-  if(b&&b.targetMs>0&&!b.isTransition)tgt.innerHTML='Objetivo: <b>'+fmtS(b.targetMs)+'</b>';
+  if(b&&b.noTime&&!b.isTransition)tgt.innerHTML='<span style="color:var(--bt)">Sin tiempo (S/T)</span>';
+  else if(b&&b.targetMs>0&&!b.isTransition)tgt.innerHTML='Objetivo: <b>'+fmtS(b.targetMs)+'</b>';
   else if(b&&!b.isTransition&&b.intensity>0)tgt.innerHTML='<span style="color:var(--rt)">Sin referencia en Config para '+b.distance+'</span>';
   else tgt.innerHTML="";
   if(s.state==="repping"){phase.textContent="Rep "+s.curRep+" — en curso"+(s.repStartLag!=null?" · reacción +"+(s.repStartLag/1000).toFixed(2)+" s":"");phase.className="mp-phase repping";timeEl.className="mp-time repping";repInfo.textContent=s.curRep+" / "+(b?b.reps:"");}
@@ -2176,7 +2203,9 @@ function renderMP(s){
     timeEl.className="mp-time resting";
     repInfo.textContent=s.curRep+" rep"+(s.curRep!==1?"s":"")+" completada"+(s.curRep!==1?"s":"");
     // Mostrar objetivo de la PRÓXIMA rep durante el descanso
-    if(b2&&b2.targetMs>0&&!b2.isTransition){
+    if(b2&&b2.noTime&&!b2.isTransition){
+      tgt.innerHTML='<span style="color:var(--bt);font-size:11px;">Próxima rep · Sin tiempo (S/T)</span><br><span style="color:var(--bt);font-size:10px;">↑ tiempo de descanso transcurrido</span>';
+    } else if(b2&&b2.targetMs>0&&!b2.isTransition){
       tgt.innerHTML='<span style="color:var(--muted);font-size:11px;">Próxima rep · Objetivo: </span><b style="color:var(--gt)">'+fmtS(b2.targetMs)+'</b>'+(b2.intensity>0?'<span style="color:var(--muted)"> · '+b2.intensity+'%</span>':'')+'<br><span style="color:var(--bt);font-size:10px;">↑ tiempo de descanso transcurrido</span>';
     } else {
       tgt.innerHTML='<span style="color:var(--bt);font-size:11px;">↑ Tiempo de descanso transcurrido</span>';
@@ -2199,7 +2228,7 @@ function renderMP(s){
       var nrDesc=(nextRealForTrans.note&&nextRealForTrans.note.trim()?nextRealForTrans.note:nextRealForTrans.name)||"";
       var nrSeries=nextRealForTrans.reps>0?nextRealForTrans.reps+'×'+nextRealForTrans.distance:'';
       var nrInfo=nrSeries+(nrDesc&&nrDesc!==nrSeries?' · '+nrDesc:'');
-      var nrTgt=nextRealForTrans.targetMs>0?'<b style="color:var(--gt)"> · Obj: '+fmtS(nextRealForTrans.targetMs)+'</b>'+(nextRealForTrans.intensity>0?'<span style="color:var(--muted)"> ('+nextRealForTrans.intensity+'%)</span>':''):'';
+      var nrTgt=nextRealForTrans.noTime?'<b style="color:var(--bt)"> · S/T</b>':nextRealForTrans.targetMs>0?'<b style="color:var(--gt)"> · Obj: '+fmtS(nextRealForTrans.targetMs)+'</b>'+(nextRealForTrans.intensity>0?'<span style="color:var(--muted)"> ('+nextRealForTrans.intensity+'%)</span>':''):'';
       tgt.innerHTML='<div style="background:rgba(26,111,181,0.12);border:.5px solid rgba(26,111,181,0.35);border-radius:7px;padding:8px 12px;margin-bottom:4px;">'
         +'<div style="font-size:10px;color:var(--bt);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;">Próxima serie</div>'
         +'<div style="font-size:16px;font-weight:600;color:var(--text);font-family:var(--mono);">'+esc(nrInfo)+'</div>'
@@ -3954,7 +3983,7 @@ function exportPlanPDF(swid){
 
   function renderBlock(b,showMeters){
     var restStr=b.restSec>0?"↻ "+fmtSec(b.restSec)+" desc/rep":"";
-    var timeStr=b.targetMs>0?fmtS(b.targetMs):"";
+    var timeStr=b.noTime?"S/T":(b.targetMs>0?fmtS(b.targetMs):"");
     var metersStr=(showMeters&&b.sectionMeters>0)?b.sectionMeters+"m":"";
     var descStr=b.note&&b.note.trim()?b.note.trim():(b.name&&b.name!=="Calentamiento"&&b.name!=="Pre-serie"&&b.name!=="Serie"?b.name:"");
     var h='<div class="series-row">'
@@ -5211,6 +5240,8 @@ function editBlockHTML(b,i){
           +'<input class="edit-field" id="edit-tgt-'+i+'" value="'+(b.targetMs>0?fmtTime(b.targetMs):"")+'" placeholder="ej: 1:06.50"></div>'
         +'<div class="edit-field-group" style="flex:1"><label>Descanso entre reps</label>'
           +'<input class="edit-field" id="edit-rest-'+i+'" value="'+(b.restSec>0?fmtSec(b.restSec):"")+'" placeholder="ej: 20s"></div>'
+        +'<div class="edit-field-group" style="flex:0 0 56px"><label>S/T</label>'
+          +'<input type="checkbox" id="edit-notime-'+i+'" title="Sin tiempo" onchange="editToggleNoTime('+i+')"'+(b.noTime?' checked':'')+' style="width:20px;height:20px;margin-top:6px;accent-color:#1a6fb5;"></div>'
       +'</div>'
       +'<div class="edit-subrest-row">'
         +'<span class="edit-tr-lbl" style="font-size:10px;">⏱ Descanso después de este sub-bloque</span>'
@@ -5220,7 +5251,23 @@ function editBlockHTML(b,i){
   +'</div>';
 }
 
+function editToggleNoTime(i){
+  var cb=document.getElementById("edit-notime-"+i);
+  var t=document.getElementById("edit-tgt-"+i);
+  var p=document.getElementById("edit-pct-"+i);
+  if(!cb)return;
+  if(cb.checked){
+    if(t){t.value="";t.disabled=true;t.placeholder="S/T";}
+    if(p){p.value="";p.disabled=true;}
+  }else{
+    if(t){t.disabled=false;t.placeholder="ej: 1:06.50";}
+    if(p)p.disabled=false;
+  }
+}
+
 function editRecalcTime(i){
+  var ntc=document.getElementById("edit-notime-"+i);
+  if(ntc&&ntc.checked)return;
   var sw=swimmers.find(function(s){return s.id===_editSwId;});if(!sw)return;
   var distEl=document.getElementById("edit-dist-"+i);
   var pctEl=document.getElementById("edit-pct-"+i);
@@ -5251,17 +5298,34 @@ function openEditModal(swid){
   modal.style.display="flex";
 }
 
+function _secOf(b){return b.type==="warmup"?"warmup":b.type==="preserie"?"preserie":"serie";}
+function _secName(k){return k==="warmup"?"Calentamiento":k==="preserie"?"Pre-serie":"Serie";}
+
 function renderEditBody(sw){
   var body=document.getElementById("edit-modal-body");if(!body)return;
   var html="";
   sw.blocks.forEach(function(b,i){
     if(b.isTransition){
+      var esMain=_isMainTransition(sw.blocks,i);
       html+='<div class="edit-tr-row" data-idx="'+i+'">'
-        +'<span class="edit-tr-lbl">⏱ Descanso entre secciones</span>'
+        +'<span class="edit-tr-lbl">⏱ '+(esMain?"Descanso entre secciones":"Descanso entre sub-bloques")+'</span>'
         +'<input class="edit-field edit-field-sm" id="edit-trans-'+i+'" value="'+(b.transitionSec?fmtSec(b.transitionSec):"")+'" placeholder="ej: 3 min">'
       +'</div>';
     } else {
       html+=editBlockHTML(b,i);
+      // ¿Cambio de sección sin descanso de transición? Ofrecer el campo igual.
+      var j=i+1,hayTr=false,sig=null;
+      while(j<sw.blocks.length){
+        if(sw.blocks[j].isTransition){hayTr=true;}
+        else{sig=sw.blocks[j];break;}
+        j++;
+      }
+      if(sig&&!hayTr&&_secOf(sig)!==_secOf(b)){
+        html+='<div class="edit-tr-row" data-newtr="'+i+'">'
+          +'<span class="edit-tr-lbl">⏱ Descanso entre '+_secName(_secOf(b))+' y '+_secName(_secOf(sig))+'</span>'
+          +'<input class="edit-field edit-field-sm" id="edit-newtrans-'+i+'" value="" placeholder="ej: 3 min">'
+        +'</div>';
+      }
       // Pre-fill the sub-rest field: look at next block, if it's a transition between same-type blocks
       // (we do this after innerHTML is set, in a second pass below)
     }
@@ -5296,6 +5360,12 @@ function editSaveCurrentState(){
   // Read all current input values back into sw.blocks (without closing modal)
   var sw=swimmers.find(function(s){return s.id===_editSwId;});if(!sw)return;
   var newSubrests={};
+  var nuevasTransSec=[];
+  sw.blocks.forEach(function(b,i){
+    if(b.isTransition)return;
+    var el=document.getElementById("edit-newtrans-"+i);
+    if(el){var v=parseDur(el.value);if(v>0)nuevasTransSec.push({after:b,sec:v});}
+  });
   sw.blocks.forEach(function(b,i){
     if(b.isTransition){
       var tv=document.getElementById("edit-trans-"+i);
@@ -5311,8 +5381,11 @@ function editSaveCurrentState(){
       if(nv){b.note=nv.value;b.name=nv.value||b.name;}
       if(rv)b.reps=parseInt(rv.value)||b.reps;
       if(dv){b.distance=dv.value||b.distance;b.distKey=b.distance;}
-      if(pv)b.intensity=parseFloat(pv.value)||0;
-      if(tv2){var newMs=parseTimeStr(tv2.value);if(newMs>0)b.targetMs=newMs;
+      var ntv=document.getElementById("edit-notime-"+i);
+      b.noTime=!!(ntv&&ntv.checked);
+      if(pv)b.intensity=b.noTime?0:(parseFloat(pv.value)||0);
+      if(b.noTime){b.targetMs=0;}
+      else if(tv2){var newMs=parseTimeStr(tv2.value);if(newMs>0)b.targetMs=newMs;
         else if(b.intensity>0){var ref=getRef(sw.name,b.distKey||b.distance);if(ref>0)b.targetMs=Math.round(ref/(b.intensity/100));}}
       if(resv)b.restSec=parseDur(resv.value);
       if(srv)newSubrests[i]=parseDur(srv.value);
@@ -5333,6 +5406,12 @@ function editSaveCurrentState(){
       var newTr={id:uid(),type:"transition",name:"Descanso "+fmtSec(sec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:sec,isTransition:true,completedReps:[]};
       sw.blocks.splice(i+1,0,newTr);
     }
+  });
+  // Nuevos descansos entre secciones (última serie de una sección → primera de la siguiente)
+  nuevasTransSec.forEach(function(nt){
+    var pos=sw.blocks.indexOf(nt.after);
+    if(pos<0)return;
+    sw.blocks.splice(pos+1,0,{id:uid(),type:"transition",name:"Descanso "+fmtSec(nt.sec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:nt.sec,isTransition:true,completedReps:[]});
   });
 }
 
@@ -5681,7 +5760,7 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
   if(!("serviceWorker" in navigator)) return;
   if(location.protocol !== "https:" && location.hostname !== "localhost") return;
   window.addEventListener("load", function(){
-    navigator.serviceWorker.register("./sw.js", {scope:"./"})
+    navigator.serviceWorker.register("./sw.js?v=20", {scope:"./", updateViaCache:"none"})
       .then(function(r){ console.log("[PWA] SW ok:", r.scope); })
       .catch(function(e){ console.warn("[PWA] SW err:", e); });
   });
@@ -6372,5 +6451,47 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
 })();
 </script>
 
+<script>
+/* v20 — Anti "Deshacer" (shake-to-undo de iOS/iPadOS).
+   El diálogo aparece cuando el dispositivo se mueve/agita y hay un campo
+   editable con historial de edición. Quitamos el foco apenas se deja de
+   escribir o el usuario se mueve, y limpiamos el historial del campo. */
+(function(){
+  function isEditable(el){
+    if(!el) return false;
+    var t=(el.tagName||'').toLowerCase();
+    return t==='input'||t==='textarea'||el.isContentEditable===true;
+  }
+  function clearUndo(el){
+    try{
+      if(el && el.tagName && el.tagName.toLowerCase()!=='select'){
+        var v=el.value; if(typeof v==='string'){ el.value=''; el.value=v; }
+      }
+    }catch(e){}
+  }
+  function blurNow(){
+    var el=document.activeElement;
+    if(isEditable(el)){ clearUndo(el); try{ el.blur(); }catch(e){} }
+  }
+  var t=null;
+  function scheduleBlur(ms){ clearTimeout(t); t=setTimeout(blurNow, ms||1200); }
+
+  document.addEventListener('input', function(e){ if(isEditable(e.target)) scheduleBlur(1500); }, true);
+  document.addEventListener('change', function(e){ if(isEditable(e.target)) blurNow(); }, true);
+  document.addEventListener('touchmove', function(){ blurNow(); }, {passive:true, capture:true});
+  window.addEventListener('scroll', function(){ blurNow(); }, {passive:true, capture:true});
+  document.addEventListener('visibilitychange', function(){ if(document.hidden) blurNow(); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Enter'&&isEditable(e.target)) blurNow(); }, true);
+
+  // Si el dispositivo se mueve, quitamos el foco antes de que iOS registre la sacudida.
+  if(window.DeviceMotionEvent){
+    window.addEventListener('devicemotion', function(ev){
+      var a=ev.accelerationIncludingGravity; if(!a) return;
+      var m=Math.abs(a.x||0)+Math.abs(a.y||0)+Math.abs(a.z||0);
+      if(m>22) blurNow();
+    }, {passive:true});
+  }
+})();
+</script>
 </body>
 </html>
