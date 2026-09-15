@@ -2599,33 +2599,58 @@ function renderHistory(){
   });
 }
 
-function _histDateKey(dateStr){
-  // dateStr is something like "15 may. 2026, 09:30" or ISO-like — extract date part YYYY-MM-DD
-  // Sessions store id as Date.now() — use that to derive a sortable date
-  // Also try to parse the display date
+function _histMonthIdx(txt){
+  if(!txt)return undefined;
+  var t=String(txt).toLowerCase().replace(/\./g,"").trim()
+        .replace(/á/g,"a").replace(/é/g,"e").replace(/í/g,"i").replace(/ó/g,"o").replace(/ú/g,"u");
+  var names=[
+    ["ene","enero"],["feb","febrero"],["mar","marzo"],["abr","abril"],
+    ["may","mayo"],["jun","junio"],["jul","julio"],["ago","agosto"],
+    ["sep","sept","septiembre","setiembre","set"],["oct","octubre"],
+    ["nov","noviembre"],["dic","diciembre"]
+  ];
+  for(var i=0;i<names.length;i++){for(var j=0;j<names[i].length;j++){if(names[i][j]===t)return i;}}
+  return undefined;
+}
+function _histKeyFromDate(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function _histDateKey(dateStr,fallbackId){
+  var s=String(dateStr||"");
   try{
-    // Try parsing "15 may. 2026, 09:30"
-    var months={"ene":0,"feb":1,"mar":2,"abr":3,"may":4,"jun":5,"jul":6,"ago":7,"sep":8,"oct":9,"nov":10,"dic":11};
-    var m=dateStr.match(/(\d{1,2})\s+([a-záéíóú\.]+)\s+(\d{4})/i);
+    // ISO: 2026-09-15...
+    var iso=s.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(iso)return iso[1]+"-"+iso[2]+"-"+iso[3];
+    // "15 sept. 2026, 09:30" / "15 de septiembre de 2026"
+    var m=s.match(/(\d{1,2})\s*(?:de\s+)?([a-záéíóúA-ZÁÉÍÓÚ\.]+)\s*(?:de\s+)?(\d{4})/);
     if(m){
-      var mo=months[(m[2].replace(".","")).toLowerCase()];
-      if(mo!==undefined){
-        var d=new Date(parseInt(m[3]),mo,parseInt(m[1]));
-        return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-      }
+      var mo=_histMonthIdx(m[2]);
+      if(mo!==undefined)return _histKeyFromDate(new Date(parseInt(m[3]),mo,parseInt(m[1])));
+    }
+    // "15/9/2026" o "15-9-2026"
+    var n=s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if(n){
+      var y=parseInt(n[3]);if(y<100)y+=2000;
+      return _histKeyFromDate(new Date(y,parseInt(n[2])-1,parseInt(n[1])));
     }
   }catch(e){}
-  return dateStr.slice(0,10);
+  // Último recurso: el id de la sesión (Date.now())
+  var id=Number(fallbackId);
+  if(id&&isFinite(id)&&id>1000000000000)return _histKeyFromDate(new Date(id));
+  return "0000-00-00";
 }
 
 function _histDayLabel(dateKey){
   try{
-    var parts=dateKey.split("-");
-    var d=new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+    var parts=String(dateKey).split("-");
+    var y=parseInt(parts[0]),mm=parseInt(parts[1]),dd=parseInt(parts[2]);
+    if(!y||!mm||!dd)return"Sin fecha";
+    var d=new Date(y,mm-1,dd);
+    if(isNaN(d.getTime()))return"Sin fecha";
     var days=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
     var months=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
     return days[d.getDay()]+" "+d.getDate()+" "+months[d.getMonth()]+" "+d.getFullYear();
-  }catch(e){return dateKey;}
+  }catch(e){return"Sin fecha";}
 }
 
 function _histShortDate(dateStr){
@@ -2664,7 +2689,7 @@ function _pgIntercept(a,b){var n=a.length;if(!n)return 0;var sx=0,sy=0;for(var i
 
 function _pgPhase(s){
   try{
-    var k=_histDateKey(s.date||"");
+    var k=_histDateKey(s.date||"",s.id);
     var m=(typeof MC!=="undefined"&&MC)?MC[k]:null;
     if(m&&m.phase)return m.phase;
     if(m&&m.desc)return m.desc;
@@ -3287,7 +3312,7 @@ function renderHistCalendar(h){
   var byDay={};
   var dayOrder=[];
   h.forEach(function(session,si){
-    var key=_histDateKey(session.date);
+    var key=_histDateKey(session.date,session.id);
     if(!byDay[key]){byDay[key]=[];dayOrder.push(key);}
     byDay[key].push({session:session,si:si});
   });
@@ -3306,7 +3331,8 @@ function renderHistCalendar(h){
   monthOrder.forEach(function(mk){
     var parts=mk.split("-");
     var months=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
-    var mLabel=months[parseInt(parts[1])-1]+" "+parts[0];
+    var mName=months[parseInt(parts[1])-1];
+    var mLabel=mName?(mName+" "+parts[0]):"Sin fecha";
     var sessionCount=byMonth[mk].reduce(function(t,dk){return t+byDay[dk].length;},0);
     html+='<div style="margin-bottom:20px;">';
     html+='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;display:flex;align-items:center;gap:8px;">'
@@ -3326,10 +3352,10 @@ function renderHistCalendar(h){
           +'</div>'
           +'<div style="font-size:10px;color:var(--faint);margin-top:1px;">'+entries.length+' sesión'+(entries.length!==1?"es":"")+'</div>'
         +'</div>'
-        +'<button class="cal-day-toggle" data-target="'+domId+'" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 8px;">▼</button>'
+        +'<button class="cal-day-toggle" data-target="'+domId+'" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 8px;">▶</button>'
       +'</div>';
-      // Day content (expanded by default)
-      html+='<div id="'+domId+'">';
+      // Day content (collapsed by default)
+      html+='<div id="'+domId+'" style="display:none">';
       entries.forEach(function(entry,ei){
         var session=entry.session;var si=entry.si;
         var swHtml=session.swimmers.map(function(sw){
