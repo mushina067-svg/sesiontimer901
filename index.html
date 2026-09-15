@@ -442,6 +442,10 @@ body{display:flex;flex-direction:column;}
       </div>
       <button id="gym-next-week" style="background:none;border:.5px solid var(--b2);border-radius:var(--rs);color:var(--muted);font-size:18px;cursor:pointer;padding:2px 12px;line-height:1.4;">›</button>
     </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+      <button id="gym-adj-toggle" onclick="gymToggleAdjust()" style="flex:1;padding:8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;">Ajustar cargas manualmente</button>
+    </div>
+    <div id="gym-adj-panel" style="display:none;background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;"></div>
     <div id="gym-day-tabs" style="display:flex;gap:5px;margin-bottom:14px;"></div>
     <div id="gym-session-content"></div>
     <div id="gym-rest-overlay" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surf);border-top:.5px solid var(--b2);padding:10px 14px;z-index:200;">
@@ -4749,7 +4753,151 @@ function gymGetDayOfWeek(){
   return "lunes"; // default
 }
 
+// ── Ajuste manual de cargas (recalcula todo el macrociclo) ───────────────────
+var GYM_ADJ_KEY = "wtimer_gym_adj_v1";
+var GYM_ADJ = {};
+var GYM_LIFTS = {
+  dom:    {label:"Dominadas lastradas", table:function(){return GYM_LUNES;},     day:"lunes",     path:["dom"]},
+  banca:  {label:"Press de banca",      table:function(){return GYM_MIERCOLES;}, day:"miercoles", path:["banca"]},
+  snatch: {label:"Medio snatch",        table:function(){return GYM_MIERCOLES;}, day:"miercoles", path:["snatch"]},
+  sq:     {label:"Sentadilla libre",    table:function(){return GYM_VIERNES;},   day:"viernes",   path:["sq"]}
+};
+
+function gymAdjLoad(){
+  try{ GYM_ADJ = JSON.parse(localStorage.getItem(GYM_ADJ_KEY) || "{}") || {}; }
+  catch(e){ GYM_ADJ = {}; }
+}
+function gymAdjSave(){
+  try{ localStorage.setItem(GYM_ADJ_KEY, JSON.stringify(GYM_ADJ)); }catch(e){}
+}
+function gymBaseKg(lift, wk){
+  var t = GYM_LIFTS[lift].table()[wk];
+  if(!t) return null;
+  var o = t[GYM_LIFTS[lift].path[0]];
+  return o ? o.kg : null;
+}
+function gymFirstNum(v){
+  if(typeof v === "number") return v;
+  var m = String(v).match(/[\d.]+/g);
+  return m ? parseFloat(m[0]) : null;
+}
+function gymRound(v){ return Math.round(v*2)/2; }
+
+// Factor vigente para una semana: el ajuste manual más reciente en o antes de esa semana
+function gymFactor(lift, wk){
+  var n = gymWeekNum(wk), best = null, bestN = -1;
+  var ovs = GYM_ADJ[lift] || {};
+  for(var k in ovs){
+    var kn = gymWeekNum(k);
+    if(kn <= n && kn > bestN){ bestN = kn; best = ovs[k]; }
+  }
+  if(best === null) return 1;
+  var base = gymFirstNum(gymBaseKg(lift, "S"+bestN));
+  if(!base) return 1;
+  return best / base;
+}
+
+// Carga efectiva mostrada (escala números sueltos y rangos tipo "86–89")
+function gymKg(lift, wk, raw){
+  if(raw === null || raw === undefined) return raw;
+  var ovs = GYM_ADJ[lift] || {};
+  if(typeof raw === "number" && ovs[wk] !== undefined) return ovs[wk];
+  var f = gymFactor(lift, wk);
+  if(f === 1) return raw;
+  if(typeof raw === "number") return gymRound(raw*f);
+  return String(raw).replace(/[\d.]+/g, function(m){ return String(gymRound(parseFloat(m)*f)); });
+}
+function gymIsAdj(lift, wk){
+  return gymFactor(lift, wk) !== 1;
+}
+function gymApplyAdj(wk, data, day){
+  if(!data) return data;
+  var out = JSON.parse(JSON.stringify(data));
+  for(var lift in GYM_LIFTS){
+    var cfg = GYM_LIFTS[lift];
+    if(cfg.day !== day) continue;
+    var o = out[cfg.path[0]];
+    if(o && o.kg !== undefined) o.kg = gymKg(lift, wk, o.kg);
+  }
+  return out;
+}
+
+function gymToggleAdjust(){
+  var p = document.getElementById("gym-adj-panel");
+  if(p.style.display === "none"){ gymRenderAdjust(); p.style.display = "block"; }
+  else p.style.display = "none";
+}
+
+function gymRenderAdjust(){
+  var wk = gymWeekKey(gymCurrentWeek);
+  var p = document.getElementById("gym-adj-panel");
+  var h = '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5;">Ingresá el peso <b>real</b> levantado en '+wk+'. El resto del macrociclo se recalcula proporcionalmente desde esa semana.</div>';
+  for(var lift in GYM_LIFTS){
+    var cfg = GYM_LIFTS[lift];
+    var base = gymBaseKg(lift, wk);
+    if(base === null || base === undefined) continue;
+    var cur = gymKg(lift, wk, base);
+    var val = (GYM_ADJ[lift] && GYM_ADJ[lift][wk] !== undefined) ? GYM_ADJ[lift][wk] : "";
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
+    h += '<span style="flex:1;font-size:12px;color:var(--text);">'+cfg.label+'<span style="display:block;font-size:10px;color:var(--faint);">plan actual: '+cur+' kg</span></span>';
+    h += '<input id="gymadj-'+lift+'" type="number" step="0.5" inputmode="decimal" placeholder="kg" value="'+val+'" style="width:88px;padding:8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--text);font-family:var(--mono);font-size:14px;text-align:center;">';
+    h += '</div>';
+  }
+  h += '<div style="display:flex;gap:6px;margin-top:10px;">';
+  h += '<button onclick="gymSaveAdjust()" style="flex:1;padding:10px;border-radius:var(--rs);border:none;background:var(--gd);color:var(--gt);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;">✓ Guardar y recalcular</button>';
+  h += '<button onclick="gymClearAdjustWeek()" style="padding:10px 12px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;">Quitar '+wk+'</button>';
+  h += '<button onclick="gymClearAdjustAll()" style="padding:10px 12px;border-radius:var(--rs);border:.5px solid var(--rb);background:var(--rd);color:var(--rt);font-size:12px;cursor:pointer;font-family:inherit;">Reset total</button>';
+  h += '</div>';
+  var lista = gymAdjList();
+  if(lista) h += '<div style="margin-top:10px;font-size:11px;color:var(--faint);line-height:1.6;">Ajustes guardados: '+lista+'</div>';
+  p.innerHTML = h;
+}
+
+function gymAdjList(){
+  var parts = [];
+  for(var lift in GYM_ADJ){
+    for(var w in GYM_ADJ[lift]){
+      parts.push((GYM_LIFTS[lift]?GYM_LIFTS[lift].label:lift)+" "+w+": "+GYM_ADJ[lift][w]+" kg");
+    }
+  }
+  return parts.join(" · ");
+}
+
+function gymSaveAdjust(){
+  var wk = gymWeekKey(gymCurrentWeek), n = 0;
+  for(var lift in GYM_LIFTS){
+    var el = document.getElementById("gymadj-"+lift);
+    if(!el) continue;
+    var v = el.value.trim();
+    if(v === ""){
+      if(GYM_ADJ[lift]) delete GYM_ADJ[lift][wk];
+      continue;
+    }
+    var num = parseFloat(v.replace(",","."));
+    if(!isFinite(num) || num <= 0) continue;
+    if(!GYM_ADJ[lift]) GYM_ADJ[lift] = {};
+    GYM_ADJ[lift][wk] = num;
+    n++;
+  }
+  gymAdjSave();
+  gymRender();
+  gymRenderAdjust();
+  alert("✓ Cargas actualizadas en "+wk+" ("+n+"). Las semanas siguientes se recalcularon.");
+}
+
+function gymClearAdjustWeek(){
+  var wk = gymWeekKey(gymCurrentWeek);
+  for(var lift in GYM_ADJ){ delete GYM_ADJ[lift][wk]; }
+  gymAdjSave(); gymRender(); gymRenderAdjust();
+}
+
+function gymClearAdjustAll(){
+  if(!confirm("¿Borrar todos los ajustes manuales y volver al plan original?")) return;
+  GYM_ADJ = {}; gymAdjSave(); gymRender(); gymRenderAdjust();
+}
+
 function gymInit(){
+  gymAdjLoad();
   gymCurrentWeek = gymGetCurrentWeek();
   gymCurrentDay = gymGetDayOfWeek();
 }
@@ -4783,6 +4931,9 @@ function gymRender(){
   var data = gymCurrentDay==="lunes"     ? GYM_LUNES[wk]
             : gymCurrentDay==="miercoles" ? GYM_MIERCOLES[wk]
             : GYM_VIERNES[wk];
+  data = gymApplyAdj(wk, data, gymCurrentDay);
+  var adjPanel = document.getElementById("gym-adj-panel");
+  if(adjPanel && adjPanel.style.display !== "none") gymRenderAdjust();
 
   if(!data){
     content.innerHTML = '<div style="text-align:center;padding:3rem 1rem;"><div style="font-size:40px;margin-bottom:12px;">🏊</div><div style="color:var(--faint);font-size:14px;">SIN GYM esta semana</div></div>';
@@ -4791,6 +4942,8 @@ function gymRender(){
 
   var tag = gymTag(wk);
   var html = "";
+  var anyAdj = ["dom","banca","snatch","sq"].some(function(l){ return gymIsAdj(l, wk); });
+  if(anyAdj) html += '<div style="display:inline-block;margin-bottom:10px;margin-right:6px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:var(--gd);color:var(--gt);">CARGAS AJUSTADAS</div>';
   if(tag) html += '<div style="display:inline-block;margin-bottom:10px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:'+(tag==="DESC"||tag==="TAPER"?"var(--ad)":"var(--bd)")+';color:'+(tag==="DESC"||tag==="TAPER"?"var(--at)":"var(--bt)")+';">'+tag+'</div>';
 
   var roller = (wk!=="S21") ? gymCardRoller() : "";
