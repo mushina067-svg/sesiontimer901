@@ -4757,11 +4757,22 @@ function gymGetDayOfWeek(){
 var GYM_ADJ_KEY = "wtimer_gym_adj_v1";
 var GYM_ADJ = {};
 var GYM_LIFTS = {
-  dom:    {label:"Dominadas lastradas", table:function(){return GYM_LUNES;},     day:"lunes",     path:["dom"]},
-  banca:  {label:"Press de banca",      table:function(){return GYM_MIERCOLES;}, day:"miercoles", path:["banca"]},
-  snatch: {label:"Medio snatch",        table:function(){return GYM_MIERCOLES;}, day:"miercoles", path:["snatch"]},
-  sq:     {label:"Sentadilla libre",    table:function(){return GYM_VIERNES;},   day:"viernes",   path:["sq"]}
+  dom:      {label:"Dominadas lastradas", table:function(){return GYM_LUNES;},     day:"lunes",     path:["dom"]},
+  jalon:    {label:"Jalón en polea baja", table:function(){return GYM_LUNES;},     day:"lunes",     path:["jalon"],  free:true},
+  pullover: {label:"Pullover en polea",   table:null,                              day:"lunes",     path:null,       free:true},
+  banca:    {label:"Press de banca",      table:function(){return GYM_MIERCOLES;}, day:"miercoles", path:["banca"]},
+  snatch:   {label:"Medio snatch",        table:function(){return GYM_MIERCOLES;}, day:"miercoles", path:["snatch"]},
+  fondos:   {label:"Fondos en paralela",  table:null,                              day:"miercoles", path:null,       free:true},
+  abs:      {label:"Abdominales (lastre)",table:null,                              day:"miercoles", path:null,       free:true},
+  sq:       {label:"Sentadilla libre",    table:function(){return GYM_VIERNES;},   day:"viernes",   path:["sq"]},
+  clean:    {label:"Medio clean",         table:function(){return GYM_VIERNES;},   day:"viernes",   path:["clean"],  free:true},
+  pesom:    {label:"Peso muerto",         table:null,                              day:"viernes",   path:null,       free:true},
+  saltos:   {label:"Saltos (lastre)",     table:null,                              day:"viernes",   path:null,       free:true}
 };
+
+// Intensidad relativa por categoría de semana (para propagar cargas manuales
+// de los ejercicios que no traen kg en el plan original)
+var GYM_CATF = {acum:1.00, intens:1.06, pico:1.12, desc:0.93, taper:0.85};
 
 function gymAdjLoad(){
   try{ GYM_ADJ = JSON.parse(localStorage.getItem(GYM_ADJ_KEY) || "{}") || {}; }
@@ -4771,7 +4782,9 @@ function gymAdjSave(){
   try{ localStorage.setItem(GYM_ADJ_KEY, JSON.stringify(GYM_ADJ)); }catch(e){}
 }
 function gymBaseKg(lift, wk){
-  var t = GYM_LIFTS[lift].table()[wk];
+  var cfg = GYM_LIFTS[lift];
+  if(!cfg || !cfg.table || !cfg.path) return null;
+  var t = cfg.table()[wk];
   if(!t) return null;
   var o = t[GYM_LIFTS[lift].path[0]];
   return o ? o.kg : null;
@@ -4807,8 +4820,36 @@ function gymKg(lift, wk, raw){
   if(typeof raw === "number") return gymRound(raw*f);
   return String(raw).replace(/[\d.]+/g, function(m){ return String(gymRound(parseFloat(m)*f)); });
 }
+// Carga manual para ejercicios sin kg en el plan: se propaga a las semanas
+// siguientes según la intensidad de cada categoría de semana.
+function gymFreeKg(lift, wk){
+  var ovs = GYM_ADJ[lift] || {};
+  if(ovs[wk] !== undefined) return ovs[wk];
+  var n = gymWeekNum(wk), best = null, bestN = -1;
+  for(var k in ovs){
+    var kn = gymWeekNum(k);
+    if(kn <= n && kn > bestN){ bestN = kn; best = ovs[k]; }
+  }
+  if(best === null) return null;
+  var f1 = GYM_CATF[gymCat("S"+bestN)] || 1;
+  var f2 = GYM_CATF[gymCat(wk)] || 1;
+  return gymRound(best * f2 / f1);
+}
+
 function gymIsAdj(lift, wk){
+  var cfg = GYM_LIFTS[lift];
+  if(cfg && cfg.free) return gymFreeKg(lift, wk) !== null;
   return gymFactor(lift, wk) !== 1;
+}
+
+// Añade la carga manual a un bloque de ejercicio complementario
+function gymWithFree(lift, wk, obj){
+  if(!obj) return obj;
+  var k = gymFreeKg(lift, wk);
+  if(k === null) return obj;
+  var o = JSON.parse(JSON.stringify(obj));
+  o.kg = k;
+  return o;
 }
 function gymApplyAdj(wk, data, day){
   if(!data) return data;
@@ -4816,8 +4857,13 @@ function gymApplyAdj(wk, data, day){
   for(var lift in GYM_LIFTS){
     var cfg = GYM_LIFTS[lift];
     if(cfg.day !== day) continue;
+    if(!cfg.path) continue;
     var o = out[cfg.path[0]];
-    if(o && o.kg !== undefined) o.kg = gymKg(lift, wk, o.kg);
+    if(!o) continue;
+    if(cfg.free){
+      var fk = gymFreeKg(lift, wk);
+      if(fk !== null) o.kg = fk;
+    } else if(o.kg !== undefined) o.kg = gymKg(lift, wk, o.kg);
   }
   return out;
 }
@@ -4835,11 +4881,16 @@ function gymRenderAdjust(){
   for(var lift in GYM_LIFTS){
     var cfg = GYM_LIFTS[lift];
     var base = gymBaseKg(lift, wk);
-    if(base === null || base === undefined) continue;
-    var cur = gymKg(lift, wk, base);
+    var cur;
+    if(base === null || base === undefined){
+      var fk = gymFreeKg(lift, wk);
+      cur = (fk === null) ? "sin carga en el plan" : fk + " kg";
+    } else {
+      cur = gymKg(lift, wk, base) + " kg";
+    }
     var val = (GYM_ADJ[lift] && GYM_ADJ[lift][wk] !== undefined) ? GYM_ADJ[lift][wk] : "";
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">';
-    h += '<span style="flex:1;font-size:12px;color:var(--text);">'+cfg.label+'<span style="display:block;font-size:10px;color:var(--faint);">plan actual: '+cur+' kg</span></span>';
+    h += '<span style="flex:1;font-size:12px;color:var(--text);">'+cfg.label+'<span style="display:block;font-size:10px;color:var(--faint);">plan actual: '+cur+'</span></span>';
     h += '<input id="gymadj-'+lift+'" type="number" step="0.5" inputmode="decimal" placeholder="kg" value="'+val+'" style="width:88px;padding:8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--text);font-family:var(--mono);font-size:14px;text-align:center;">';
     h += '</div>';
   }
@@ -4942,7 +4993,7 @@ function gymRender(){
 
   var tag = gymTag(wk);
   var html = "";
-  var anyAdj = ["dom","banca","snatch","sq"].some(function(l){ return gymIsAdj(l, wk); });
+  var anyAdj = Object.keys(GYM_LIFTS).some(function(l){ return gymIsAdj(l, wk); });
   if(anyAdj) html += '<div style="display:inline-block;margin-bottom:10px;margin-right:6px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:var(--gd);color:var(--gt);">CARGAS AJUSTADAS</div>';
   if(tag) html += '<div style="display:inline-block;margin-bottom:10px;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;background:'+(tag==="DESC"||tag==="TAPER"?"var(--ad)":"var(--bd)")+';color:'+(tag==="DESC"||tag==="TAPER"?"var(--at)":"var(--bt)")+';">'+tag+'</div>';
 
@@ -4951,20 +5002,20 @@ function gymRender(){
   if(gymCurrentDay==="lunes"){
     html += gymCardDom(data.dom);
     html += gymCardJalon(data.jalon);
-    html += gymCardPullover(gymPhase(wk, GYM_PULLOVER));
+    html += gymCardPullover(gymWithFree('pullover', wk, gymPhase(wk, GYM_PULLOVER)));
     html += roller;
     html += '<div style="background:var(--surf2);border-radius:var(--rs);border:.5px solid var(--b1);padding:10px 14px;margin-bottom:8px;font-size:11px;color:var(--faint);line-height:1.5;">Gym siempre 30–45 min ANTES de la piscina (efecto PAP).</div>';
   } else if(gymCurrentDay==="miercoles"){
     html += gymCardBanca(data.banca);
     html += gymCardSnatch(data.snatch);
-    html += gymCardFondos(gymPhase(wk, GYM_FONDOS));
-    html += gymCardAbs(gymPhase(wk, GYM_ABS));
+    html += gymCardFondos(gymWithFree('fondos', wk, gymPhase(wk, GYM_FONDOS)));
+    html += gymCardAbs(gymWithFree('abs', wk, gymPhase(wk, GYM_ABS)));
     html += roller;
   } else {
     html += gymCardSentadilla(data.sq);
     html += gymCardClean(data.clean);
-    html += gymCardPesoMuerto(gymPhase(wk, GYM_PESOM));
-    html += gymCardSaltos(gymPhase(wk, GYM_SALTOS));
+    html += gymCardPesoMuerto(gymWithFree('pesom', wk, gymPhase(wk, GYM_PESOM)));
+    html += gymCardSaltos(gymWithFree('saltos', wk, gymPhase(wk, GYM_SALTOS)));
     html += roller;
     html += '<div style="background:var(--bd);border-radius:var(--rs);border:.5px solid var(--bb);padding:10px 14px;margin-bottom:8px;font-size:11px;color:var(--bt);line-height:1.5;"><b>Orden inamovible (PAP):</b> 1) Sentadilla pesada → 2) Saltos horizontales → 3) Sesión de potencia en agua. No se invierte.</div>';
   }
@@ -4988,6 +5039,7 @@ function gymExCard(title, color, rows, descMin, exerciseName){
   h += '</div>';
   h += '<div style="padding:10px 14px;">';
   rows.forEach(function(r){
+    if(!r) return;
     h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:.5px solid var(--b1);">';
     h += '<span style="font-size:12px;color:var(--muted);">'+r.label+'</span>';
     h += '<span style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);">'+r.value+'</span>';
@@ -5025,6 +5077,7 @@ function gymCardJalon(j){
     {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
     [
       {label:"Series × Reps", value: j.sx},
+      (j.kg!==undefined&&j.kg!==null ? {label:"Carga", value: j.kg+" kg"} : null),
       {label:"Descanso", value: j.desc+" min"},
     ],
     j.desc,
@@ -5038,6 +5091,7 @@ function gymCardPullover(p){
     {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
     [
       {label:"Series × Reps", value: p.sx},
+      (p.kg!==undefined&&p.kg!==null ? {label:"Carga", value: p.kg+" kg"} : null),
       {label:"Descanso", value: "1:30 min"},
     ],
     p.desc,
@@ -5080,6 +5134,7 @@ function gymCardFondos(f){
     {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
     [
       {label:"Series × Reps", value: f.sx},
+      (f.kg!==undefined&&f.kg!==null ? {label:"Lastre", value: f.kg+" kg"} : null),
       {label:"Descanso", value: f.desc+" min"},
     ],
     f.desc,
@@ -5093,6 +5148,7 @@ function gymCardAbs(a){
     {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
     [
       {label:"Series × Reps", value: a.sx},
+      (a.kg!==undefined&&a.kg!==null ? {label:"Lastre", value: a.kg+" kg"} : null),
       {label:"Descanso", value: a.desc+" min"},
     ],
     a.desc,
@@ -5121,6 +5177,7 @@ function gymCardClean(c){
     {bg:"var(--gd)",txt:"var(--gt)",bd:"var(--gb)"},
     [
       {label:"Series × Reps", value: c.sx},
+      (c.kg!==undefined&&c.kg!==null ? {label:"Carga", value: c.kg+" kg"} : null),
       {label:"Descanso", value: c.desc+" min"},
     ],
     c.desc,
@@ -5134,6 +5191,7 @@ function gymCardPesoMuerto(pm){
     {bg:"var(--surf2)",txt:"var(--muted)",bd:"var(--b2)"},
     [
       {label:"Series × Reps", value: pm.sx},
+      (pm.kg!==undefined&&pm.kg!==null ? {label:"Carga", value: pm.kg+" kg"} : null),
       {label:"Descanso", value: pm.desc+" min"},
     ],
     pm.desc,
@@ -5147,6 +5205,7 @@ function gymCardSaltos(s){
     {bg:"var(--pd)",txt:"var(--pt)",bd:"var(--purple)"},
     [
       {label:"Series × Reps", value: s.sx},
+      (s.kg!==undefined&&s.kg!==null ? {label:"Lastre", value: s.kg+" kg"} : null),
       {label:"Descanso", value: s.desc+" min"},
     ],
     s.desc,
