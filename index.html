@@ -1300,8 +1300,24 @@ function loadSavedSessions(){
   }catch(e){console.warn("loadSavedSessions error:",e);}
 }
 
+function sessionInProgress(){
+  return swimmers.some(function(s){
+    if(s.state==="repping"||s.state==="resting"||s.state==="transition"||s.state==="stopped") return true;
+    if(s.curBlock>0||s.curRep>0) return true;
+    if(s.doneBlocks&&s.doneBlocks.length) return true;
+    return !!(s.blocks&&s.blocks.some(function(b){return b.completedReps&&b.completedReps.length;}));
+  });
+}
 document.getElementById("btn-go-timer").addEventListener("click",function(){
   if(!swimmers.length)return;
+  // v27: si ya hay una sesión en curso, volvemos al cronómetro SIN reiniciar nada.
+  if(sessionInProgress()){
+    renderMiniCards();updateGlobalBtns();
+    var _sel=swimmers.find(function(x){return x.id===selId;});
+    if(_sel){ selectSw(_sel.id); } else { clearMP(); }
+    showTab("timer");
+    return;
+  }
   swimmers.forEach(function(s){
     s.state=s.blocks&&s.blocks.length?"idle":"noplan";
     s.curBlock=0;s.curRep=0;s.phase="idle";s.repStart=0;s.restStart=0;s.repElapsed=0;s.restElapsed=0;s.curSplits=[];s.doneBlocks=[];s.savedEvent="";
@@ -2280,9 +2296,18 @@ function renderRepsList(s){
 // ── REP TIME EDIT MODAL ───────────────────────────────────────────
 var _repEditSwId=null,_repEditRepN=null;
 
+function findRepBlock(sw,repN){
+  var b=curBlock(sw);
+  if(b&&b.completedReps&&b.completedReps.some(function(r){return r.n===repN;})) return b;
+  var found=null;
+  (sw.blocks||[]).forEach(function(bb){
+    if(!found&&bb.completedReps&&bb.completedReps.some(function(r){return r.n===repN;})) found=bb;
+  });
+  return found;
+}
 function openRepEditModal(swId,repN){
   var sw=swimmers.find(function(x){return x.id===swId;});if(!sw)return;
-  var b=curBlock(sw);if(!b||!b.completedReps)return;
+  var b=findRepBlock(sw,repN);if(!b||!b.completedReps)return;
   var rep=b.completedReps.find(function(r){return r.n===repN;});if(!rep)return;
   _repEditSwId=swId;_repEditRepN=repN;
   // Format current time as mm:ss.000
@@ -2309,7 +2334,7 @@ function confirmRepEdit(){
   var ms=parseRepTimeInput(raw);
   if(ms===null||ms<=0){alert("Formato inválido. Usá mm:ss.000 (ej: 0:24.740)");return;}
   var sw=swimmers.find(function(x){return x.id===_repEditSwId;});if(!sw)return;
-  var b=curBlock(sw);if(!b||!b.completedReps)return;
+  var b=findRepBlock(sw,_repEditRepN);if(!b||!b.completedReps)return;
   var rep=b.completedReps.find(function(r){return r.n===_repEditRepN;});if(!rep)return;
   rep.time=ms;
   rep.comp=calcComp(ms,b.targetMs);
@@ -6656,15 +6681,27 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       }
     }catch(e){}
   }
+  function isProtected(el){
+    // v27: no quitamos el foco mientras se edita un tiempo o un modal abierto
+    try{
+      if(!el) return false;
+      if(el.id==='rep-edit-inp') return true;
+      if(el.closest && el.closest('.rep-edit-overlay,.modal,.edit-modal,[data-no-blur]')) return true;
+      var ov=document.getElementById('rep-edit-overlay');
+      if(ov && ov.className.indexOf('open')>=0) return true;
+    }catch(e){}
+    return false;
+  }
   function blurNow(){
     var el=document.activeElement;
+    if(isProtected(el)) return;
     if(isEditable(el)){ clearUndo(el); try{ el.blur(); }catch(e){} }
   }
   var t=null;
   function scheduleBlur(ms){ clearTimeout(t); t=setTimeout(blurNow, ms||1200); }
 
-  document.addEventListener('input', function(e){ if(isEditable(e.target)) scheduleBlur(1500); }, true);
-  document.addEventListener('change', function(e){ if(isEditable(e.target)) blurNow(); }, true);
+  document.addEventListener('input', function(e){ if(isEditable(e.target)&&!isProtected(e.target)) scheduleBlur(4000); }, true);
+  document.addEventListener('change', function(e){ if(isEditable(e.target)&&!isProtected(e.target)) blurNow(); }, true);
   document.addEventListener('touchmove', function(){ blurNow(); }, {passive:true, capture:true});
   window.addEventListener('scroll', function(){ blurNow(); }, {passive:true, capture:true});
   document.addEventListener('visibilitychange', function(){ if(document.hidden) blurNow(); });
