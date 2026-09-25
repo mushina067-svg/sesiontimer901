@@ -556,7 +556,7 @@ body{display:flex;flex-direction:column;}
         <div class="tpl-subs" id="tpl-subs-warmup"></div>
         <div style="padding:0 8px 6px;display:flex;align-items:center;gap:6px;">
           <span style="font-size:10px;color:var(--faint);">Metros sección:</span>
-          <input type="number" id="tpl-meters-warmup" placeholder="ej: 600" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
+          <span style="font-size:10px;color:var(--faint);">Repetir ×</span><input type="number" class="rounds-inp" id="tpl-rounds-warmup" value="1" min="1" max="20" style="width:48px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:12px;font-family:var(--mono);"> <input type="number" id="tpl-meters-warmup" placeholder="ej: 600" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
         </div>
       </div>
       <!-- TRANSICIÓN 1 -->
@@ -575,7 +575,7 @@ body{display:flex;flex-direction:column;}
         <div class="tpl-subs" id="tpl-subs-preserie"></div>
         <div style="padding:0 8px 6px;display:flex;align-items:center;gap:6px;">
           <span style="font-size:10px;color:var(--faint);">Metros sección:</span>
-          <input type="number" id="tpl-meters-preserie" placeholder="ej: 400" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
+          <span style="font-size:10px;color:var(--faint);">Repetir ×</span><input type="number" class="rounds-inp" id="tpl-rounds-preserie" value="1" min="1" max="20" style="width:48px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:12px;font-family:var(--mono);"> <input type="number" id="tpl-meters-preserie" placeholder="ej: 400" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
         </div>
       </div>
       <!-- TRANSICIÓN 2 -->
@@ -594,9 +594,10 @@ body{display:flex;flex-direction:column;}
         <div class="tpl-subs" id="tpl-subs-serie"></div>
         <div style="padding:0 8px 6px;display:flex;align-items:center;gap:6px;">
           <span style="font-size:10px;color:var(--faint);">Metros sección:</span>
-          <input type="number" id="tpl-meters-serie" placeholder="ej: 500" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
+          <span style="font-size:10px;color:var(--faint);">Repetir ×</span><input type="number" class="rounds-inp" id="tpl-rounds-serie" value="1" min="1" max="20" style="width:48px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:12px;font-family:var(--mono);"> <input type="number" id="tpl-meters-serie" placeholder="ej: 500" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
         </div>
       </div>
+      <div id="tpl-total" style="margin:8px 14px 0;padding:8px 10px;border-radius:6px;background:var(--surf2);font-size:13px;font-family:var(--mono);color:var(--text);text-align:right;">Total: <b>0</b> m</div>
       <div style="padding:10px 14px;display:flex;gap:6px;flex-wrap:wrap;">
         <button class="btn-primary" id="btn-tpl-save" style="margin-top:0;flex:1;">💾 Guardar plantilla</button>
         <button id="btn-tpl-cancel-edit" style="display:none;flex:1;padding:13px;border-radius:var(--r);border:.5px solid var(--rb);background:var(--rd);color:var(--rt);font-size:14px;cursor:pointer;font-family:inherit;">✕ Cancelar edición</button>
@@ -916,7 +917,7 @@ function buildManualPanelHTML(swid){
   +'<div class="mb-section">'
     +'<div class="mb-sec-hdr"><span class="mb-sec-title warmup">Calentamiento</span>'
       +'<div style="display:flex;align-items:center;gap:6px">'
-        +'<input type="number" id="mb-meters-'+swid+'-warmup" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
+        +'<span style="font-size:10px;color:var(--faint)">Repetir ×</span><input type="number" class="rounds-inp" id="mb-rounds-'+swid+'-warmup" value="1" min="1" max="20" title="Repetir toda la secuencia de sub-bloques" style="width:44px;padding:3px 6px;border-radius:4px;border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:11px;font-family:var(--mono);text-align:right;">'+'<input type="number" id="mb-meters-'+swid+'-warmup" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
         +'<span style="font-size:10px;color:var(--faint)">m</span>'
         +'<button class="btn-add-sub" data-action="add-sub" data-swid="'+swid+'" data-sec="warmup">+ Sub-bloque</button>'
       +'</div>'
@@ -927,7 +928,7 @@ function buildManualPanelHTML(swid){
   +'<div class="mb-section">'
     +'<div class="mb-sec-hdr"><span class="mb-sec-title preserie">Pre-serie</span>'
       +'<div style="display:flex;align-items:center;gap:6px">'
-        +'<input type="number" id="mb-meters-'+swid+'-preserie" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
+        +'<span style="font-size:10px;color:var(--faint)">Repetir ×</span><input type="number" class="rounds-inp" id="mb-rounds-'+swid+'-preserie" value="1" min="1" max="20" title="Repetir toda la secuencia de sub-bloques" style="width:44px;padding:3px 6px;border-radius:4px;border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:11px;font-family:var(--mono);text-align:right;">'+'<input type="number" id="mb-meters-'+swid+'-preserie" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
         +'<span style="font-size:10px;color:var(--faint)">m</span>'
         +'<button class="btn-add-sub" data-action="add-sub" data-swid="'+swid+'" data-sec="preserie">+ Sub-bloque</button>'
       +'</div>'
@@ -938,14 +939,14 @@ function buildManualPanelHTML(swid){
   +'<div class="mb-section">'
     +'<div class="mb-sec-hdr"><span class="mb-sec-title serie">Serie</span>'
       +'<div style="display:flex;align-items:center;gap:6px">'
-        +'<input type="number" id="mb-meters-'+swid+'-serie" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
+        +'<span style="font-size:10px;color:var(--faint)">Repetir ×</span><input type="number" class="rounds-inp" id="mb-rounds-'+swid+'-serie" value="1" min="1" max="20" title="Repetir toda la secuencia de sub-bloques" style="width:44px;padding:3px 6px;border-radius:4px;border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:11px;font-family:var(--mono);text-align:right;">'+'<input type="number" id="mb-meters-'+swid+'-serie" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
         +'<span style="font-size:10px;color:var(--faint)">m</span>'
         +'<button class="btn-add-sub" data-action="add-sub" data-swid="'+swid+'" data-sec="serie">+ Sub-bloque</button>'
       +'</div>'
     +'</div>'
     +'<div class="mb-subs" id="mb-subs-'+swid+'-serie">'+subHTML('serie',0)+'</div>'
   +'</div>'
-  +'<button class="btn-primary" data-action="load-manual" data-id="'+swid+'">Generar sesión</button>';
+  +'<div class="mtotal" id="mb-total-'+swid+'" style="margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--surf2);font-size:13px;font-family:var(--mono);color:var(--text);text-align:right;">Total: <b>0</b> m</div>'+'<button class="btn-primary" data-action="load-manual" data-id="'+swid+'">Generar sesión</button>';
 }
 
 function addSub(swid,sec){
@@ -1035,6 +1036,74 @@ function calcTime(swid,sec,idx){
   }
 }
 
+
+// ── REPETIR SECUENCIA + SUMA AUTOMÁTICA DE METROS (v28) ──────────
+function expandRounds(blocks,r){
+  r=Math.max(1,Math.min(20,r||1));
+  if(r<=1||!blocks.length)return blocks;
+  var out=[];
+  for(var k=1;k<=r;k++){
+    blocks.forEach(function(b){
+      var c=JSON.parse(JSON.stringify(b));
+      if(!c.isTransition){c.name=(c.name||"")+" ("+k+"/"+r+")";c.round=k;c.rounds=r;}
+      if(k>1)delete c.sectionMeters;
+      out.push(c);
+    });
+  }
+  // quitar descanso final después de la última vuelta si no lo había en la secuencia original ya se conserva
+  return out;
+}
+function _distMeters(d){var m=String(d||"").match(/(\d+)\s*m/i);return m?parseInt(m[1]):0;}
+function _secSum(cont,prefix,getId){
+  var sum=0;
+  cont.querySelectorAll(prefix).forEach(function(sub,i){
+    var ids=getId(sub,i);
+    var r=document.getElementById(ids.reps),d=document.getElementById(ids.dist);
+    sum+=(parseInt(r&&r.value)||0)*_distMeters(d&&d.value);
+  });
+  return sum;
+}
+function recalcMeters(){
+  document.querySelectorAll('[id^="mb-total-"]').forEach(function(tot){
+    var swid=tot.id.slice(9),total=0;
+    ["warmup","preserie","serie"].forEach(function(sec){
+      var cont=document.getElementById("mb-subs-"+swid+"-"+sec);if(!cont)return;
+      var sum=0;
+      cont.querySelectorAll(".mb-sub").forEach(function(sub){
+        var idx=sub.id.split("-").pop();
+        var r=document.getElementById("mb-reps-"+swid+"-"+sec+"-"+idx),d=document.getElementById("mb-dist-"+swid+"-"+sec+"-"+idx);
+        sum+=(parseInt(r&&r.value)||0)*_distMeters(d&&d.value);
+      });
+      sum*=parseInt((document.getElementById("mb-rounds-"+swid+"-"+sec)||{}).value)||1;
+      var m=document.getElementById("mb-meters-"+swid+"-"+sec);
+      if(m&&String(m.value)!==String(sum||""))m.value=sum||"";
+      total+=sum;
+    });
+    tot.innerHTML="Total: <b>"+total+"</b> m";
+  });
+  var tt=document.getElementById("tpl-total");
+  if(tt){var total=0;
+    ["warmup","preserie","serie"].forEach(function(sec){
+      var cont=document.getElementById("tpl-subs-"+sec);if(!cont)return;var sum=0;
+      cont.querySelectorAll(".tpl-sub").forEach(function(sub){
+        var idx=sub.id.replace("tpl-sub-"+sec+"-","");
+        var r=document.getElementById("tpl-reps-"+sec+"-"+idx),d=document.getElementById("tpl-dist-"+sec+"-"+idx);
+        sum+=(parseInt(r&&r.value)||0)*_distMeters(d&&d.value);
+      });
+      sum*=parseInt((document.getElementById("tpl-rounds-"+sec)||{}).value)||1;
+      var m=document.getElementById("tpl-meters-"+sec);
+      if(m&&String(m.value)!==String(sum||""))m.value=sum||"";
+      total+=sum;
+    });
+    tt.innerHTML="Total: <b>"+total+"</b> m";
+  }
+}
+var _rmT=null;function scheduleRecalc(){clearTimeout(_rmT);_rmT=setTimeout(recalcMeters,60);}
+document.addEventListener("input",scheduleRecalc,true);
+document.addEventListener("change",scheduleRecalc,true);
+document.addEventListener("click",scheduleRecalc,true);
+try{new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;if(t&&t.id&&(/^mb-subs-|^tpl-subs-|^manual-/.test(t.id)||t.querySelector&&t.querySelector('.mb-subs,.tpl-subs'))){scheduleRecalc();return;}}}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
+
 function collectSubs(swid,sec,blockType){
   var cont=document.getElementById("mb-subs-"+swid+"-"+sec);if(!cont)return[];
   var blocks=[];
@@ -1057,7 +1126,7 @@ function collectSubs(swid,sec,blockType){
     blocks.push({type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,noTime:noTime,note:desc});
     if(subRestSec>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:subRestSec,isTransition:true});
   });
-  return blocks;
+  return expandRounds(blocks,parseInt((document.getElementById("mb-rounds-"+swid+"-"+sec)||{}).value)||1);
 }
 
 // ── EDITAR SESIÓN → abre panel Manual pre-cargado ────────────────
@@ -4257,6 +4326,8 @@ function tplCollectBlocks(){
   var tr1Sec=parseDur((document.getElementById("tpl-tr1")||{}).value||"");
   var tr2Sec=parseDur((document.getElementById("tpl-tr2")||{}).value||"");
 
+  var _cs=collectSec;
+  collectSec=function(sec,bt){var st=blocks.length;_cs(sec,bt);var part=blocks.splice(st);var r=parseInt((document.getElementById("tpl-rounds-"+sec)||{}).value)||1;expandRounds(part,r).forEach(function(b){blocks.push(b);});};
   var startW=blocks.length;
   collectSec("warmup","warmup");
   if(mW>0&&blocks.length>startW)blocks[startW].sectionMeters=mW;
