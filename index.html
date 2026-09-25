@@ -1038,80 +1038,65 @@ function calcTime(swid,sec,idx){
 
 
 
-// ── REPETIR CADA SUBBLOQUE DE FORMA INDEPENDIENTE (v30) ──────────
-function _subRepeatVal(sub){
-  var el=sub.querySelector(".sub-repeat-x");
+// ── REPETIR UNA SECUENCIA DE SUBBLOQUES (v31) ───────────────────
+function _sequenceTimes(cont){
+  var el=cont.querySelector(".sequence-repeat-x");
   return Math.max(1,Math.min(30,parseInt(el&&el.value)||1));
 }
-function repeatSubblocks(blocks,segs){
-  if(!segs.length)return blocks;
-  var out=[];
-  segs.forEach(function(seg,i){
-    var end=(i+1<segs.length)?segs[i+1].start:blocks.length;
-    var part=blocks.slice(seg.start,end);
-    for(var k=1;k<=seg.x;k++){
-      part.forEach(function(bl){
-        var c=JSON.parse(JSON.stringify(bl));
-        if(seg.x>1&&!c.isTransition){
-          c.name=(c.name||"")+" · Repetición "+k+"/"+seg.x;
-          c.subRepeatIndex=k;
-          c.subRepeatCount=seg.x;
-        }
-        out.push(c);
+function _ensureSequenceControls(cont){
+  if(!cont.querySelector(":scope > .sequence-repeat-bar")){
+    var bar=document.createElement("div");
+    bar.className="sequence-repeat-bar";
+    bar.style.cssText="display:flex;align-items:center;gap:8px;margin:0 0 8px;padding:8px 10px;border-radius:6px;border:1px solid var(--gb,#2e7d32);background:var(--gd);flex-wrap:wrap;";
+    bar.innerHTML='<strong style="font-size:11px;color:var(--gt,#4caf50);">🔁 Repetir secuencia ×</strong>'
+      +'<input type="number" class="sequence-repeat-x" min="1" max="30" value="1" aria-label="Cantidad de vueltas de la secuencia" style="width:58px;padding:5px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--text);font-size:13px;font-family:var(--mono);text-align:right;">'
+      +'<span class="sequence-repeat-info" style="font-size:10px;color:var(--muted);">Marcá abajo qué subbloques forman la secuencia</span>';
+    cont.insertBefore(bar,cont.firstChild);
+  }
+  [].slice.call(cont.querySelectorAll(":scope > .mb-sub, :scope > .tpl-sub")).forEach(function(sub){
+    if(sub.querySelector(".sequence-include"))return;
+    var old=sub.querySelector(".sub-repeat-row");if(old)old.remove();
+    var row=document.createElement("label");
+    row.className="sequence-item-row";
+    row.style.cssText="display:flex;align-items:center;gap:7px;margin-top:5px;padding:6px 8px;border-radius:4px;border:.5px dashed var(--gb,#2e7d32);color:var(--gt,#4caf50);font-size:10px;cursor:pointer;";
+    row.innerHTML='<input type="checkbox" class="sequence-include" checked style="width:17px;height:17px;accent-color:var(--gt,#4caf50);"> Incluir este subbloque en la secuencia';
+    sub.appendChild(row);
+  });
+}
+function expandSequence(entries,times){
+  var out=[],i=0;
+  while(i<entries.length){
+    if(!entries[i].include||times<=1){out=out.concat(entries[i].blocks);i++;continue;}
+    var run=[],j=i;
+    while(j<entries.length&&entries[j].include){run.push(entries[j]);j++;}
+    for(var k=1;k<=times;k++){
+      run.forEach(function(entry,pos){
+        entry.blocks.forEach(function(bl){
+          var c=JSON.parse(JSON.stringify(bl));
+          if(!c.isTransition)c.name=(c.name||"")+" · Vuelta "+k+"/"+times;
+          c.sequenceRepeat=times;c.sequenceRound=k;c.sequenceIndex=pos+1;c.sequenceLength=run.length;
+          out.push(c);
+        });
       });
     }
-  });
-  if(blocks[0]&&blocks[0].sectionMeters&&out[0])out[0].sectionMeters=blocks[0].sectionMeters;
-  return out;
-}
-function _ensureSubRepeatField(sub){
-  if(sub.querySelector(".sub-repeat-x"))return;
-  var d=document.createElement("div");
-  d.className="sub-repeat-row";
-  d.style.cssText="display:flex;align-items:center;gap:7px;margin-top:5px;padding:6px 8px;border-radius:4px;border:.5px dashed var(--gb,#2e7d32);flex-wrap:wrap;";
-  d.innerHTML='<span style="font-size:10px;color:var(--gt,#4caf50);white-space:nowrap;">🔁 Repetir este subbloque ×</span>'
-   +'<input type="number" class="sub-repeat-x" min="1" max="30" value="1" aria-label="Repetir este subbloque" style="width:58px;padding:4px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--text);font-size:12px;font-family:var(--mono);text-align:right;">'
-   +'<span class="sub-repeat-info" style="font-size:10px;color:var(--faint);"></span>';
-  sub.appendChild(d);
-}
-// ── REPETIR SECUENCIA + SUMA AUTOMÁTICA DE METROS (v28) ──────────
-function expandRounds(blocks,r){
-  r=Math.max(1,Math.min(20,r||1));
-  if(r<=1||!blocks.length)return blocks;
-  var out=[];
-  for(var k=1;k<=r;k++){
-    blocks.forEach(function(b){
-      var c=JSON.parse(JSON.stringify(b));
-      if(!c.isTransition){c.name=(c.name||"")+" ("+k+"/"+r+")";c.round=k;c.rounds=r;}
-      if(k>1)delete c.sectionMeters;
-      out.push(c);
-    });
+    i=j;
   }
-  // quitar descanso final después de la última vuelta si no lo había en la secuencia original ya se conserva
   return out;
 }
 function _distMeters(d){var m=String(d||"").match(/(\d+)\s*m/i);return m?parseInt(m[1]):0;}
-function _secSum(cont,prefix,getId){
-  var sum=0;
-  cont.querySelectorAll(prefix).forEach(function(sub,i){
-    var ids=getId(sub,i);
-    var r=document.getElementById(ids.reps),d=document.getElementById(ids.dist);
-    sum+=(parseInt(r&&r.value)||0)*_distMeters(d&&d.value);
-  });
-  return sum;
-}
 function _sumCont(cont,sel,repsId,distId){
-  var sum=0;
+  _ensureSequenceControls(cont);
+  var selected=0,loose=0,times=_sequenceTimes(cont);
   [].slice.call(cont.querySelectorAll(sel)).forEach(function(sub){
-    _ensureSubRepeatField(sub);
     var r=document.getElementById(repsId(sub)),d=document.getElementById(distId(sub));
     var base=(parseInt(r&&r.value)||0)*_distMeters(d&&d.value);
-    var times=_subRepeatVal(sub);
-    sum+=base*times;
-    var info=sub.querySelector(".sub-repeat-info");
-    if(info)info.textContent=times>1?("= "+times+" × "+base+" m = "+(base*times)+" m"):"";
-    sub.style.borderLeft=times>1?"3px solid var(--gt,#4caf50)":"";
+    var inc=sub.querySelector(".sequence-include");
+    if(inc&&inc.checked){selected+=base;sub.style.borderLeft=times>1?"3px solid var(--gt,#4caf50)":"";}
+    else{loose+=base;sub.style.borderLeft="";}
   });
+  var sum=loose+selected*times;
+  var info=cont.querySelector(".sequence-repeat-info");
+  if(info)info.textContent=times>1?(times+" × "+selected+" m + "+loose+" m = "+sum+" m"):"Marcá abajo qué subbloques forman la secuencia";
   return sum;
 }
 function recalcMeters(){
@@ -1149,9 +1134,10 @@ try{new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].t
 
 function collectSubs(swid,sec,blockType){
   var cont=document.getElementById("mb-subs-"+swid+"-"+sec);if(!cont)return[];
-  var blocks=[],_segs=[];
-  cont.querySelectorAll(".mb-sub").forEach(function(sub,i){
-    _segs.push({start:blocks.length,x:_subRepeatVal(sub)});
+  _ensureSequenceControls(cont);
+  var entries=[];
+  cont.querySelectorAll(":scope > .mb-sub").forEach(function(sub){
+    var i=sub.id.split("-").pop();
     var g=function(id){var el=document.getElementById(id);return el?el.value:"";};
     var desc=g("mb-desc-"+swid+"-"+sec+"-"+i);
     var reps=parseInt(g("mb-reps-"+swid+"-"+sec+"-"+i))||1;
@@ -1161,16 +1147,14 @@ function collectSubs(swid,sec,blockType){
     var restStr=g("mb-rest-"+swid+"-"+sec+"-"+i);
     var subRestStr=g("mb-subrest-"+swid+"-"+sec+"-"+i);
     var ntEl=document.getElementById("mb-notime-"+swid+"-"+sec+"-"+i);
-    var noTime=!!(ntEl&&ntEl.checked);
-    var targetMs=parseTimeStr(timeStr);
-    var restSec=parseDur(restStr);
-    var subRestSec=parseDur(subRestStr);
+    var noTime=!!(ntEl&&ntEl.checked),targetMs=parseTimeStr(timeStr),restSec=parseDur(restStr),subRestSec=parseDur(subRestStr);
     if(noTime){targetMs=0;pct=0;}
     if(!noTime&&!targetMs&&pct>0){var refMs=getRef(swimmers.find(function(s){return s.id===swid;})||{name:""},dist);if(refMs>0)targetMs=Math.round(refMs/(pct/100));}
-    blocks.push({type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,noTime:noTime,note:desc});
-    if(subRestSec>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:subRestSec,isTransition:true});
+    var parts=[{type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,noTime:noTime,note:desc}];
+    if(subRestSec>0)parts.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:subRestSec,isTransition:true});
+    var inc=sub.querySelector(".sequence-include");entries.push({include:!!(inc&&inc.checked),blocks:parts});
   });
-  return repeatSubblocks(blocks,_segs);
+  return expandSequence(entries,_sequenceTimes(cont));
 }
 
 // ── EDITAR SESIÓN → abre panel Manual pre-cargado ────────────────
@@ -1191,6 +1175,7 @@ function openManualEdit(id){
   var lastSec=null;
 
   sw.blocks.forEach(function(b){
+    if(b.sequenceRound>1)return;
     if(b.isTransition){
       // Detectar si es transición principal (entre secciones) o sub-descanso
       // La distinción original usa _isMainTransition pero aquí la recreamos:
@@ -1245,6 +1230,7 @@ function openManualEdit(id){
     // Recorrer los bloques originales filtrando la sección
     var inSec=false,subIdx=0;
     sw.blocks.forEach(function(b){
+      if(b.sequenceRound>1)return;
       if(!b.isTransition){
         var bSec=b.type==="warmup"?"warmup":b.type==="preserie"?"preserie":"serie";
         if(bSec===sec){inSec=true;subsInSec.push({block:b,subIdx:subIdx});subIdx++;}
@@ -1285,6 +1271,9 @@ function openManualEdit(id){
         +'<input type="text" id="mb-subrest-'+id+'-'+sec+'-'+i+'" placeholder="ej: 2 min" value="'+subRestVal+'" style="flex:1;padding:4px 8px;border-radius:4px;border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:12px;font-family:var(--mono);">'
       +'</div>';
       cont.appendChild(div);
+      _ensureSequenceControls(cont);
+      var seqCheck=div.querySelector(".sequence-include");if(seqCheck)seqCheck.checked=(b.sequenceRepeat||1)>1;
+      var seqTimes=cont.querySelector(".sequence-repeat-x");if(seqTimes&&(b.sequenceRepeat||1)>1)seqTimes.value=b.sequenceRepeat;
 
       // Seleccionar la distancia correcta en el <select>
       var distSel=document.getElementById("mb-dist-"+id+"-"+sec+"-"+i);
@@ -4333,39 +4322,18 @@ function tplCollectBlocks(){
   var blocks=[];
   function collectSec(sec, blockType){
     var cont=document.getElementById("tpl-subs-"+sec);if(!cont)return;
-    var subs=cont.querySelectorAll(".tpl-sub");
-    var _st0=blocks.length,_segs=[];
-    subs.forEach(function(sub){
-      _segs.push({start:blocks.length-_st0,x:_subRepeatVal(sub)});
+    _ensureSequenceControls(cont);
+    var entries=[];
+    cont.querySelectorAll(":scope > .tpl-sub").forEach(function(sub){
       var id=sub.id.replace("tpl-sub-"+sec+"-","");
       var g=function(fid){var el=document.getElementById("tpl-"+fid+"-"+sec+"-"+id);return el?el.value.trim():"";};
-      var desc=g("desc");
-      var reps=parseInt(g("reps"))||1;
-      var dist=g("dist")||"25m libre";
-      var pct=parseFloat(g("pct"))||0;
-      var restStr=g("rest");
-      var subRestStr=g("subrest");
-      var restSec=parseDur(restStr);
-      var subRestSec=parseDur(subRestStr);
-      blocks.push({
-        type:blockType,
-        name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),
-        reps:reps,
-        distance:dist,
-        distKey:dist,
-        intensity:pct,        // % — SIN targetMs, se calcula al aplicar
-        restSec:restSec,
-        targetMs:0,           // 0 en plantilla, se calcula por nadador
-        note:desc||"",
-        isTransition:false,
-        transitionSec:0,
-        sectionMeters:0
-      });
-      if(subRestSec>0){
-        blocks.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:subRestSec,sectionMeters:0});
-      }
+      var desc=g("desc"),reps=parseInt(g("reps"))||1,dist=g("dist")||"25m libre",pct=parseFloat(g("pct"))||0;
+      var restSec=parseDur(g("rest")),subRestSec=parseDur(g("subrest"));
+      var parts=[{type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:0,note:desc||"",isTransition:false,transitionSec:0,sectionMeters:0}];
+      if(subRestSec>0)parts.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:subRestSec,sectionMeters:0});
+      var inc=sub.querySelector(".sequence-include");entries.push({include:!!(inc&&inc.checked),blocks:parts});
     });
-    var _part=blocks.splice(_st0);repeatSubblocks(_part,_segs).forEach(function(b){blocks.push(b);});
+    expandSequence(entries,_sequenceTimes(cont)).forEach(function(b){blocks.push(b);});
   }
   var mW=parseInt((document.getElementById("tpl-meters-warmup")||{}).value)||0;
   var mP=parseInt((document.getElementById("tpl-meters-preserie")||{}).value)||0;
@@ -4567,6 +4535,7 @@ function editTemplate(idx){
   if(tr1El)tr1El.value="";if(tr2El)tr2El.value="";
   var warmupToPreserieDone=false,preSerieToserieDone=false;
   t.blocks.forEach(function(b,i){
+    if(b.sequenceRound>1)return;
     if(b.isTransition){
       var prevReal=null;
       for(var j=i-1;j>=0;j--){if(!t.blocks[j].isTransition){prevReal=t.blocks[j];break;}}
@@ -4611,6 +4580,9 @@ function editTemplate(idx){
         +'<input type="text" id="tpl-subrest-'+sec+'-'+idx+'" placeholder="ej: 2 min" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--bb);background:var(--surf3);color:var(--bt);font-size:12px;font-family:var(--mono);">'
       +'</div>';
     cont.appendChild(div);
+    _ensureSequenceControls(cont);
+    var seqCheck=div.querySelector(".sequence-include");if(seqCheck)seqCheck.checked=(b.sequenceRepeat||1)>1;
+    var seqTimes=cont.querySelector(".sequence-repeat-x");if(seqTimes&&(b.sequenceRepeat||1)>1)seqTimes.value=b.sequenceRepeat;
     // Set selected distance
     var distSel=document.getElementById("tpl-dist-"+sec+"-"+idx);
     if(distSel){
