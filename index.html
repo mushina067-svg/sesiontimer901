@@ -1038,52 +1038,41 @@ function calcTime(swid,sec,idx){
 
 
 
-// ── AGRUPAR SERIES: ej. 3 × (1×50, 1×75, 1×100) (v29) ─────────────
-function _grpVal(sub,k){var el=sub.querySelector(k==="g"?".grp-id":".grp-x");if(!el)return k==="g"?"":1;return k==="g"?String(el.value||"").trim().toUpperCase():Math.max(1,Math.min(30,parseInt(el.value)||1));}
-function _groupRuns(segs){ // devuelve [{from,to,x,g}]
-  var runs=[];
-  segs.forEach(function(sg,i){
-    var last=runs[runs.length-1];
-    if(sg.g&&last&&last.g===sg.g&&last.to===i-1){last.to=i;}
-    else runs.push({from:i,to:i,g:sg.g,x:sg.g?sg.x:1});
-  });
-  return runs;
+// ── REPETIR CADA SUBBLOQUE DE FORMA INDEPENDIENTE (v30) ──────────
+function _subRepeatVal(sub){
+  var el=sub.querySelector(".sub-repeat-x");
+  return Math.max(1,Math.min(30,parseInt(el&&el.value)||1));
 }
-function groupExpand(blocks,segs){
+function repeatSubblocks(blocks,segs){
   if(!segs.length)return blocks;
   var out=[];
-  _groupRuns(segs).forEach(function(r){
-    var a=segs[r.from].start,b=(r.to+1<segs.length)?segs[r.to+1].start:blocks.length;
-    var part=blocks.slice(a,b);
-    for(var k=1;k<=r.x;k++)part.forEach(function(bl){
-      var c=JSON.parse(JSON.stringify(bl));
-      if(r.x>1&&!c.isTransition){c.name=(c.name||"")+" · Grupo "+r.g+" ("+k+"/"+r.x+")";c.group=r.g;c.round=k;c.rounds=r.x;}
-      out.push(c);
-    });
+  segs.forEach(function(seg,i){
+    var end=(i+1<segs.length)?segs[i+1].start:blocks.length;
+    var part=blocks.slice(seg.start,end);
+    for(var k=1;k<=seg.x;k++){
+      part.forEach(function(bl){
+        var c=JSON.parse(JSON.stringify(bl));
+        if(seg.x>1&&!c.isTransition){
+          c.name=(c.name||"")+" · Repetición "+k+"/"+seg.x;
+          c.subRepeatIndex=k;
+          c.subRepeatCount=seg.x;
+        }
+        out.push(c);
+      });
+    }
   });
   if(blocks[0]&&blocks[0].sectionMeters&&out[0])out[0].sectionMeters=blocks[0].sectionMeters;
   return out;
 }
-function _ensureGrpFields(sub){
-  if(sub.querySelector(".grp-id"))return;
+function _ensureSubRepeatField(sub){
+  if(sub.querySelector(".sub-repeat-x"))return;
   var d=document.createElement("div");
-  d.className="grp-row";
-  d.style.cssText="display:flex;align-items:center;gap:6px;margin-top:5px;padding:5px 6px;border-radius:4px;border:.5px dashed var(--gb,#2e7d32);flex-wrap:wrap;";
-  d.innerHTML='<span style="font-size:10px;color:var(--gt,#4caf50);white-space:nowrap;">🔁 Grupo:</span>'
-   +'<input type="text" class="grp-id" maxlength="2" placeholder="A" title="Misma letra en series seguidas = un grupo" style="width:44px;padding:4px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--text);font-size:12px;font-family:var(--mono);text-align:center;text-transform:uppercase;">'
-   +'<span style="font-size:10px;color:var(--gt,#4caf50);white-space:nowrap;">Repetir grupo ×</span>'
-   +'<input type="number" class="grp-x" min="1" max="30" value="1" style="width:54px;padding:4px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--text);font-size:12px;font-family:var(--mono);text-align:right;">'
-   +'<span class="grp-info" style="font-size:10px;color:var(--faint);"></span>';
+  d.className="sub-repeat-row";
+  d.style.cssText="display:flex;align-items:center;gap:7px;margin-top:5px;padding:6px 8px;border-radius:4px;border:.5px dashed var(--gb,#2e7d32);flex-wrap:wrap;";
+  d.innerHTML='<span style="font-size:10px;color:var(--gt,#4caf50);white-space:nowrap;">🔁 Repetir este subbloque ×</span>'
+   +'<input type="number" class="sub-repeat-x" min="1" max="30" value="1" aria-label="Repetir este subbloque" style="width:58px;padding:4px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--text);font-size:12px;font-family:var(--mono);text-align:right;">'
+   +'<span class="sub-repeat-info" style="font-size:10px;color:var(--faint);"></span>';
   sub.appendChild(d);
-  d.querySelector(".grp-x").addEventListener("input",function(){ // sincroniza vueltas en todo el grupo
-    var me=this,g=_grpVal(sub,"g");if(!g)return;var cont=sub.parentNode;
-    cont.querySelectorAll(".grp-id").forEach(function(e){if(String(e.value).trim().toUpperCase()===g){var x=e.parentNode.querySelector(".grp-x");if(x!==me)x.value=me.value;}});
-  });
-  d.querySelector(".grp-id").addEventListener("change",function(){
-    var g=_grpVal(sub,"g");if(!g)return;var cont=sub.parentNode,src=null;
-    cont.querySelectorAll(".grp-id").forEach(function(e){if(e!==this&&String(e.value).trim().toUpperCase()===g&&!src)src=e.parentNode.querySelector(".grp-x");}.bind(this));
-    if(src)d.querySelector(".grp-x").value=src.value;
-  });
 }
 // ── REPETIR SECUENCIA + SUMA AUTOMÁTICA DE METROS (v28) ──────────
 function expandRounds(blocks,r){
@@ -1112,18 +1101,16 @@ function _secSum(cont,prefix,getId){
   return sum;
 }
 function _sumCont(cont,sel,repsId,distId){
-  var subs=[].slice.call(cont.querySelectorAll(sel)),segs=[],vals=[];
-  subs.forEach(function(sub){_ensureGrpFields(sub);
-    var r=document.getElementById(repsId(sub)),d=document.getElementById(distId(sub));
-    vals.push((parseInt(r&&r.value)||0)*_distMeters(d&&d.value));
-    segs.push({g:_grpVal(sub,"g"),x:_grpVal(sub,"x")});
-  });
   var sum=0;
-  _groupRuns(segs).forEach(function(run){
-    var t=0;for(var i=run.from;i<=run.to;i++)t+=vals[i];
-    sum+=t*run.x;
-    for(var i=run.from;i<=run.to;i++){var inf=subs[i].querySelector(".grp-info");if(inf)inf.textContent=(run.g&&i===run.to)?("= "+run.x+" × "+t+" m = "+(t*run.x)+" m"):"";
-      subs[i].style.borderLeft=run.g?"3px solid var(--gt,#4caf50)":"";}
+  [].slice.call(cont.querySelectorAll(sel)).forEach(function(sub){
+    _ensureSubRepeatField(sub);
+    var r=document.getElementById(repsId(sub)),d=document.getElementById(distId(sub));
+    var base=(parseInt(r&&r.value)||0)*_distMeters(d&&d.value);
+    var times=_subRepeatVal(sub);
+    sum+=base*times;
+    var info=sub.querySelector(".sub-repeat-info");
+    if(info)info.textContent=times>1?("= "+times+" × "+base+" m = "+(base*times)+" m"):"";
+    sub.style.borderLeft=times>1?"3px solid var(--gt,#4caf50)":"";
   });
   return sum;
 }
@@ -1164,7 +1151,7 @@ function collectSubs(swid,sec,blockType){
   var cont=document.getElementById("mb-subs-"+swid+"-"+sec);if(!cont)return[];
   var blocks=[],_segs=[];
   cont.querySelectorAll(".mb-sub").forEach(function(sub,i){
-    _segs.push({start:blocks.length,g:_grpVal(sub,"g"),x:_grpVal(sub,"x")});
+    _segs.push({start:blocks.length,x:_subRepeatVal(sub)});
     var g=function(id){var el=document.getElementById(id);return el?el.value:"";};
     var desc=g("mb-desc-"+swid+"-"+sec+"-"+i);
     var reps=parseInt(g("mb-reps-"+swid+"-"+sec+"-"+i))||1;
@@ -1183,7 +1170,7 @@ function collectSubs(swid,sec,blockType){
     blocks.push({type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,noTime:noTime,note:desc});
     if(subRestSec>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:subRestSec,isTransition:true});
   });
-  return groupExpand(blocks,_segs);
+  return repeatSubblocks(blocks,_segs);
 }
 
 // ── EDITAR SESIÓN → abre panel Manual pre-cargado ────────────────
@@ -4349,7 +4336,7 @@ function tplCollectBlocks(){
     var subs=cont.querySelectorAll(".tpl-sub");
     var _st0=blocks.length,_segs=[];
     subs.forEach(function(sub){
-      _segs.push({start:blocks.length-_st0,g:_grpVal(sub,"g"),x:_grpVal(sub,"x")});
+      _segs.push({start:blocks.length-_st0,x:_subRepeatVal(sub)});
       var id=sub.id.replace("tpl-sub-"+sec+"-","");
       var g=function(fid){var el=document.getElementById("tpl-"+fid+"-"+sec+"-"+id);return el?el.value.trim():"";};
       var desc=g("desc");
@@ -4378,7 +4365,7 @@ function tplCollectBlocks(){
         blocks.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:subRestSec,sectionMeters:0});
       }
     });
-    var _part=blocks.splice(_st0);groupExpand(_part,_segs).forEach(function(b){blocks.push(b);});
+    var _part=blocks.splice(_st0);repeatSubblocks(_part,_segs).forEach(function(b){blocks.push(b);});
   }
   var mW=parseInt((document.getElementById("tpl-meters-warmup")||{}).value)||0;
   var mP=parseInt((document.getElementById("tpl-meters-preserie")||{}).value)||0;
