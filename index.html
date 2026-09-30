@@ -218,7 +218,8 @@ body{display:flex;flex-direction:column;}
 .rep-edit-btns{display:flex;gap:8px;}
 .rep-edit-cancel{flex:1;padding:12px;border-radius:var(--rs);border:.5px solid var(--b2);background:none;color:var(--muted);font-size:14px;cursor:pointer;font-family:inherit;}
 .rep-edit-confirm{flex:1;padding:12px;border-radius:var(--rs);border:none;background:var(--green);color:#fff;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;}
-.rep-edit-btn-pencil{background:none;border:none;color:var(--faint);font-size:13px;cursor:pointer;padding:0 0 0 6px;line-height:1;vertical-align:middle;}
+.rep-edit-btn-pencil{background:var(--surf2);border:.5px solid var(--b2);border-radius:8px;color:var(--at);font-size:18px;cursor:pointer;padding:6px 12px;margin-left:8px;line-height:1;vertical-align:middle;min-width:44px;min-height:36px;touch-action:manipulation;}
+.reps-blk-hdr{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:10px 0 4px;}
 .rep-edit-btn-pencil:active{color:var(--at);}
 
 /* CONFIG */
@@ -1501,12 +1502,29 @@ function _unlockAndDecode(){
 }
 
 // Paso 2: reproducir (llamar en click posterior, buffers ya listos)
+// v33: mantener vivo el audio (parlante Bluetooth / iPad)
+function _wtAudioOk(){
+  try{
+    if(navigator.audioSession){ try{ navigator.audioSession.type='playback'; }catch(e){} }
+    if(!_audioCtx || _audioCtx.state==='closed'){ _audioUnlocked=false; _unlockAndDecode(); }
+    if(_audioCtx && _audioCtx.state!=='running'){ _audioCtx.resume().catch(function(){}); }
+    if(_audioCtx && !_wtKeep){
+      var o=_audioCtx.createOscillator(), g=_audioCtx.createGain();
+      o.frequency.value=40; g.gain.value=0.0008;   // inaudible: evita que el parlante BT se duerma
+      o.connect(g); g.connect(_audioCtx.destination); o.start(0); _wtKeep=o;
+    }
+  }catch(e){ console.warn('[Audio] keep-alive',e); }
+}
+var _wtKeep=null;
+if(navigator.audioSession){ try{ navigator.audioSession.type='playback'; }catch(e){} }
+['touchend','click','pointerup'].forEach(function(ev){ document.addEventListener(ev,function(){ _wtAudioOk(); },{passive:true,capture:true}); });
+document.addEventListener('visibilitychange',function(){ if(!document.hidden) _wtAudioOk(); });
+window.addEventListener('pageshow',function(){ _wtAudioOk(); });
+
 function _playBufNow(buf){
   return new Promise(function(resolve){
     if(!_audioCtx||!buf){resolve();return;}
-    if(_audioCtx.state==='suspended'){
-      _audioCtx.resume();
-    }
+    _wtAudioOk();
     var src=_audioCtx.createBufferSource();
     src.buffer=buf;
     src.connect(_audioCtx.destination);
@@ -1522,7 +1540,7 @@ function _playBufNow(buf){
 function _playBeepAtOnset(buf){
   return new Promise(function(resolve){
     if(!_audioCtx || !buf){ _raceBeepAt = performance.now(); resolve(); return; }
-    if(_audioCtx.state === 'suspended'){ _audioCtx.resume(); }
+    _wtAudioOk();
     var src = _audioCtx.createBufferSource();
     src.buffer = buf;
     src.connect(_audioCtx.destination);
@@ -1534,6 +1552,7 @@ function _playBeepAtOnset(buf){
 }
 
 function _syntheticBeep(){
+  _wtAudioOk();
   if(!_audioCtx) return;
   var t=_audioCtx.currentTime+0.02;
   function tone(f,tp,v,st,d){
@@ -1551,7 +1570,7 @@ function _syntheticBeep(){
 function _playRaceSequence(){
   return new Promise(function(resolve){
     if(!_audioUnlocked || !_audioCtx){ _raceBeepAt = performance.now(); resolve(); return; }
-    if(_audioCtx.state==='suspended'){ _audioCtx.resume(); }
+    _wtAudioOk();
 
     if(_bufVoice && _bufBeep){
       // _startDelay = tiempo TOTAL (ms) desde inicio de voz hasta pitido
@@ -1675,7 +1694,7 @@ function _runCalRound(){
     _calState = 'listening';
     _calT0 = performance.now();
     if(_audioCtx && _bufBeep){
-      if(_audioCtx.state === 'suspended') _audioCtx.resume();
+      _wtAudioOk();
       var src = _audioCtx.createBufferSource();
       src.buffer = _bufBeep;
       src.connect(_audioCtx.destination);
@@ -2364,19 +2383,24 @@ function renderMP(s){
   renderRepsList(s);updateSaveBar();
 }
 function renderRepsList(s){
-  var b=curBlock(s);var hdr=document.getElementById("reps-hdr");var body=document.getElementById("reps-body");
+  var hdr=document.getElementById("reps-hdr");var body=document.getElementById("reps-body");
   if(!hdr||!body)return;
-  var reps=b&&b.completedReps&&b.completedReps.length?b.completedReps:[];
-  if(!reps.length){hdr.className="reps-hdr";body.innerHTML="";return;}
+  // v33: mostrar TODOS los bloques con tiempos (actual primero) para poder corregir cualquiera
+  var order=[];(s.blocks||[]).forEach(function(bb,i){if(bb&&!bb.isTransition&&bb.completedReps&&bb.completedReps.length)order.push(i);});
+  order.sort(function(a,c){return a===s.curBlock?-1:c===s.curBlock?1:c-a;});
+  if(!order.length){hdr.className="reps-hdr";body.innerHTML="";return;}
   hdr.className="reps-hdr vis";
   var html="";
-  reps.slice().reverse().forEach(function(r){
+  order.forEach(function(bi){
+  var b=s.blocks[bi];
+  if(order.length>1)html+='<div class="reps-blk-hdr">'+(bi===s.curBlock?'▶ ':'')+(b.name||('Bloque '+(bi+1)))+'</div>';
+  b.completedReps.slice().reverse().forEach(function(r){
     var diff=r.comp?'<span class="rd2 '+r.comp.cls+'">'+r.comp.diffStr+'</span>':'<span class="rd2 c-none">—</span>';
     var pct=r.comp?'<span class="rp2 '+r.comp.cls+'">'+r.comp.pctStr+'</span>':'<span class="rp2 c-none">—</span>';
     var rest=r.restTime>0?'<span class="rr2">'+fmt(r.restTime)+'</span>':'<span class="rr2 c-none">—</span>';
     html+='<div class="rep-row"><span class="rn">'+r.n+'</span>'
       +'<span class="rt2">'+fmtS(r.time)
-        +'<button class="rep-edit-btn-pencil" title="Editar tiempo" onclick="openRepEditModal(\''+s.id+'\','+r.n+')">✏</button>'
+        +'<button class="rep-edit-btn-pencil" title="Editar tiempo" onclick="openRepEditModal(\''+s.id+'\','+r.n+','+bi+')">✏ Editar</button>'
       +'</span>'+diff+pct+rest+'</div>';
     if(r.startLag!=null){
       html+='<div class="split-sub">'
@@ -2392,11 +2416,12 @@ function renderRepsList(s){
       html+='</div>';
     }
   });
+  });
   body.innerHTML=html;
 }
 
 // ── REP TIME EDIT MODAL ───────────────────────────────────────────
-var _repEditSwId=null,_repEditRepN=null;
+var _repEditSwId=null,_repEditRepN=null,_repEditBi=null;
 
 function findRepBlock(sw,repN){
   var b=curBlock(sw);
@@ -2407,9 +2432,10 @@ function findRepBlock(sw,repN){
   });
   return found;
 }
-function openRepEditModal(swId,repN){
+function openRepEditModal(swId,repN,bi){
   var sw=swimmers.find(function(x){return x.id===swId;});if(!sw)return;
-  var b=findRepBlock(sw,repN);if(!b||!b.completedReps)return;
+  _repEditBi=(bi!=null&&sw.blocks&&sw.blocks[bi])?bi:null;
+  var b=_repEditBi!=null?sw.blocks[_repEditBi]:findRepBlock(sw,repN);if(!b||!b.completedReps)return;
   var rep=b.completedReps.find(function(r){return r.n===repN;});if(!rep)return;
   _repEditSwId=swId;_repEditRepN=repN;
   // Format current time as mm:ss.000
@@ -2426,7 +2452,7 @@ function openRepEditModal(swId,repN){
 
 function closeRepEditModal(){
   document.getElementById("rep-edit-overlay").className="rep-edit-overlay";
-  _repEditSwId=null;_repEditRepN=null;
+  _repEditSwId=null;_repEditRepN=null;_repEditBi=null;
 }
 
 function confirmRepEdit(){
@@ -2436,10 +2462,11 @@ function confirmRepEdit(){
   var ms=parseRepTimeInput(raw);
   if(ms===null||ms<=0){alert("Formato inválido. Usá mm:ss.000 (ej: 0:24.740)");return;}
   var sw=swimmers.find(function(x){return x.id===_repEditSwId;});if(!sw)return;
-  var b=findRepBlock(sw,_repEditRepN);if(!b||!b.completedReps)return;
+  var b=_repEditBi!=null?sw.blocks[_repEditBi]:findRepBlock(sw,_repEditRepN);if(!b||!b.completedReps)return;
   var rep=b.completedReps.find(function(r){return r.n===_repEditRepN;});if(!rep)return;
   rep.time=ms;
   rep.comp=calcComp(ms,b.targetMs);
+  try{saveSessions();}catch(e){}
   closeRepEditModal();
   renderRepsList(sw);
   if(sw.id===selId)renderMP(sw);
@@ -5921,7 +5948,9 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
     try{
       var C = window.AudioContext || window.webkitAudioContext;
       if(!C) return;
-      var ctx = window._wtBeepCtx || (window._wtBeepCtx = new C());
+      if(typeof _wtAudioOk==='function') _wtAudioOk();
+      var ctx = (typeof _audioCtx!=='undefined' && _audioCtx) || window._wtBeepCtx || (window._wtBeepCtx = new C());
+      if(ctx.state!=='running') ctx.resume();
       var o = ctx.createOscillator(), g = ctx.createGain();
       o.type = "square"; o.frequency.value = 880;
       g.gain.setValueAtTime(0.15, ctx.currentTime);
