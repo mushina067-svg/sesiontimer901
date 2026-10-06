@@ -504,7 +504,8 @@ body{display:flex;flex-direction:column;}
       <div class="mp-time" id="mp-time">00:00.000</div>
       <div class="mp-repinfo" id="mp-repinfo"></div>
       <div class="mp-splits" id="mp-splits"></div>
-      <div id="mp-strokes" style="display:none;align-items:center;justify-content:center;gap:10px;padding:6px 14px">
+      <div id="mp-strokes" style="display:none;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:6px 14px">
+        <select class="exp-sel" id="strk-dist" style="flex:0 0 auto;max-width:120px" title="Distancia de la repetición para contar brazadas"><option value="0">Dist: bloque</option><option value="25">25 m</option><option value="50">50 m</option><option value="75">75 m</option><option value="100">100 m</option><option value="200">200 m</option></select>
         <button class="btn-skip" id="btn-strk-minus" style="min-width:56px;font-size:18px">−1</button>
         <button class="btn-skip" id="btn-strk-plus" style="flex:1;max-width:320px;min-height:64px;font-size:20px;font-weight:700;border-color:var(--gb);color:var(--gt);background:var(--gd,transparent)">🏊 Brazada +1 <span id="strk-count">0</span></button>
       </div>
@@ -1960,25 +1961,53 @@ function takeSplit(s){
   if(!s.curSplits)s.curSplits=[];
   if(s.curSplits.length&&t<=s.curSplits[s.curSplits.length-1])return; // evita doble toque
   s.curSplits.push(t);
-  renderLiveSplits(s);updateSplitBtn(s);
+  if(s.strokeOn){if(!s.curStrokeSplits)s.curStrokeSplits=[];s.curStrokeSplits.push(s.curStrokes||0);}
+  renderLiveSplits(s);updateSplitBtn(s);renderStrokeUI(s);
 }
 function undoSplit(s){
   if(!s||!s.curSplits||!s.curSplits.length)return;
-  s.curSplits.pop();renderLiveSplits(s);updateSplitBtn(s);
+  s.curSplits.pop();if(s.curStrokeSplits&&s.curStrokeSplits.length>s.curSplits.length)s.curStrokeSplits.pop();renderLiveSplits(s);renderStrokeUI(s);updateSplitBtn(s);
 }
 function takeSplitsForRep(s){ // se llama al cerrar la rep
   var arr=(s.curSplits&&s.curSplits.length)?s.curSplits.slice():null;
   s.curSplits=[];
   return arr;
 }
-function takeStrokes(s){var n=(s.strokeOn&&s.curStrokes>0)?s.curStrokes:null;s.curStrokes=0;renderStrokeUI(s);return n;}
+function takeStrokes(s){var n=(s.strokeOn&&s.curStrokes>0)?s.curStrokes:null;
+  s._lastStrokeSplits=n?(s.curStrokeSplits||[]).slice():null;s._lastStrokeDist=n?(s.strokeDist||0):0;
+  s.curStrokes=0;s.curStrokeSplits=[];renderStrokeUI(s);return n;}
+function attachStrokeExtra(s,b){var r=b&&b.completedReps&&b.completedReps[b.completedReps.length-1];
+  if(r&&r.strokes){r.strokeSplits=s._lastStrokeSplits||[];if(s._lastStrokeDist)r.strokeDist=s._lastStrokeDist;}}
+function strokeDistOf(b,r){return (r&&r.strokeDist)||blockDistM(b)||parseFloat(b&&b.distance)||0;}
+function strokeSegments(b,r){
+  if(!r||!r.strokes||!r.strokeSplits||!r.strokeSplits.length)return [];
+  var tot=strokeDistOf(b,r),out=[],prev=0,prevD=0,tPrev=0;
+  var cum=r.strokeSplits.concat([r.strokes]);var tms=(r.splits||[]).concat([r.time]);
+  cum.forEach(function(c,i){var last=i===cum.length-1;var d=last?(tot||(i+1)*SPLIT_STEP_M):(i+1)*SPLIT_STEP_M;
+    var m=Math.max(1,d-prevD);var n=Math.max(0,c-prev);var t=(tms[i]!=null?tms[i]:0)-tPrev;
+    out.push({label:(last&&!tot)?"Final":d+"m",n:n,m:m,per25:n*25/m,t:t,rate:t>0?n/(t/60000):0});
+    prev=c;prevD=d;tPrev=tms[i]!=null?tms[i]:tPrev;});
+  return out;}
+function strokeSummary(segs){
+  if(segs.length<2)return null;
+  var vals=segs.map(function(x){return x.per25;});var f=vals[0],l=vals[vals.length-1];
+  var mx=Math.max.apply(null,vals),mn=Math.min.apply(null,vals);var dif=l-f;var pct=f>0?dif/f*100:0;
+  var v=(mx-mn)<=1?"Se mantuvo estable":dif>0?"Aumentaron las brazadas (cae la eficiencia)":"Bajaron las brazadas (mejor eficiencia)";
+  return{first:f,last:l,dif:dif,pct:pct,rango:mx-mn,verdict:v,cls:(mx-mn)<=1?"c-ok":dif>0?"dl-slow":"dl-fast"};}
 function strokeStats(b,r){
-  if(!r||!r.strokes)return null;var d=blockDistM(b)||parseFloat(b&&b.distance)||0;var t=r.time/1000;
+  if(!r||!r.strokes)return null;var d=strokeDistOf(b,r);var t=r.time/1000;
   return{n:r.strokes,rate:t>0?r.strokes/(t/60):0,dps:d>0?d/r.strokes:0,per25:d>0?r.strokes*25/d:0,swolf:d>0?(t*25/d)+(r.strokes*25/d):0};
 }
 function strokeHtml(b,r){var st=strokeStats(b,r);if(!st)return "";
   return '<div class="split-sub"><span><b>Brazadas</b> '+st.n+'</span><span><b>Frecuencia</b> '+st.rate.toFixed(1)+' br/min</span>'
-   +(st.dps?'<span><b>Dist/brazada</b> '+st.dps.toFixed(2)+' m</span><span><b>Br/25m</b> '+st.per25.toFixed(1)+'</span><span><b>SWOLF 25</b> '+st.swolf.toFixed(1)+'</span>':'')+'</div>';}
+   +(st.dps?'<span><b>Dist/brazada</b> '+st.dps.toFixed(2)+' m</span><span><b>Br/25m</b> '+st.per25.toFixed(1)+'</span><span><b>SWOLF 25</b> '+st.swolf.toFixed(1)+'</span>':'')+'</div>'
+   +strokeSegHtml(b,r);}
+function strokeSegHtml(b,r){var sg=strokeSegments(b,r);if(!sg.length)return "";
+  var h='<div class="split-sub"><span><b>Brazadas por parcial:</b></span>';
+  sg.forEach(function(x,i){var d=i>0?x.n-sg[i-1].n:null;h+='<span><b>'+x.label+'</b> '+x.n+' br'+(x.m!==25?' <i>('+x.per25.toFixed(1)+'/25)</i>':'')+(d!==null?' <u class="'+(d>0?"dl-slow":d<0?"dl-fast":"")+'">'+(d>0?"+":"")+d+'</u>':'')+'</span>';});
+  h+='</div>';var sm=strokeSummary(sg);
+  if(sm)h+='<div class="split-sub"><span><b>Resumen</b> <u class="'+sm.cls+'">'+sm.verdict+'</u></span><span><b>1º→último</b> '+sm.first.toFixed(1)+' → '+sm.last.toFixed(1)+' br/25 ('+(sm.dif>0?"+":"")+sm.dif.toFixed(1)+', '+(sm.pct>0?"+":"")+sm.pct.toFixed(0)+'%)</span><span><b>Variación</b> '+sm.rango.toFixed(1)+' br</span></div>';
+  return h;}
 function renderStrokeUI(s){
   var tg=document.getElementById("btn-strk-toggle"),row=document.getElementById("mp-strokes"),c=document.getElementById("strk-count");
   if(!tg||!row)return;
@@ -1986,7 +2015,10 @@ function renderStrokeUI(s){
   tg.textContent="🏊 Contar brazadas: "+(s.strokeOn?"SÍ":"NO");
   tg.style.borderColor=s.strokeOn?"var(--gb)":"";tg.style.color=s.strokeOn?"var(--gt)":"";
   var b=curBlock(s);var on=!!(s.strokeOn&&s.state==="repping"&&b&&!b.isTransition);
-  row.style.display=on?"flex":"none";if(c)c.textContent="("+(s.curStrokes||0)+")";
+  row.style.display=on?"flex":"none";
+  var tramo=(s.curStrokes||0)-((s.curStrokeSplits&&s.curStrokeSplits.length)?s.curStrokeSplits[s.curStrokeSplits.length-1]:0);
+  if(c)c.textContent="("+(s.curStrokes||0)+(s.curStrokeSplits&&s.curStrokeSplits.length?" · tramo "+tramo:"")+")";
+  var ds=document.getElementById("strk-dist");if(ds)ds.value=String(s.strokeDist||0);
 }
 function renderLiveSplits(s){
   var el=document.getElementById("mp-splits");if(!el)return;
@@ -2017,7 +2049,7 @@ function startRep(s){
   s.repManualStart=_nextRepManual; _nextRepManual=false;
   s.repStartLag = s.repManualStart ? (s.pendingStartLag!=null?s.pendingStartLag:null) : null;
   s.pendingStartLag=null;
-  s.curRep++;s.repStart=performance.now();s.repElapsed=0;s.state="repping";s.curSplits=[];s.curStrokes=0;
+  s.curRep++;s.repStart=performance.now();s.repElapsed=0;s.state="repping";s.curSplits=[];s.curStrokes=0;s.curStrokeSplits=[];
   updateMini(s);if(s.id===selId)renderMP(s);ensureLoop();updateGlobalBtns();
 }
 function endRep(s){
@@ -2027,7 +2059,7 @@ function endRep(s){
   var _repTime=Math.round(s.repElapsed);
   if(blockIsConPartida(b) && _btOffset>0 && !s.repManualStart) _repTime=Math.max(100, _repTime-_btOffset);
   var comp=calcComp(_repTime,b.targetMs);
-  b.completedReps.push({n:s.curRep,time:_repTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s),strokes:takeStrokes(s),startLag:(s.repStartLag!=null?s.repStartLag:null)});
+  b.completedReps.push({n:s.curRep,time:_repTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s),strokes:takeStrokes(s),startLag:(s.repStartLag!=null?s.repStartLag:null)});attachStrokeExtra(s,b);
   s.repStartLag=null;
   var sub=document.getElementById("ms-"+s.id);
   if(sub)sub.textContent="R"+s.curRep+" "+fmtS(s.repElapsed)+(comp?" "+comp.pctStr:"");
@@ -2054,7 +2086,7 @@ function finishTransition(s){
 }
 function stopBlock(s){
   var b=curBlock(s);
-  if(b&&s.state==="repping"){s.repElapsed=performance.now()-s.repStart;var _sRepTime=Math.round(s.repElapsed);if(blockIsConPartida(b)&&_btOffset>0&&!s.repManualStart)_sRepTime=Math.max(100,_sRepTime-_btOffset);var comp=calcComp(_sRepTime,b.targetMs);b.completedReps.push({n:s.curRep,time:_sRepTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s),strokes:takeStrokes(s),startLag:(s.repStartLag!=null?s.repStartLag:null)});s.repStartLag=null;}
+  if(b&&s.state==="repping"){s.repElapsed=performance.now()-s.repStart;var _sRepTime=Math.round(s.repElapsed);if(blockIsConPartida(b)&&_btOffset>0&&!s.repManualStart)_sRepTime=Math.max(100,_sRepTime-_btOffset);var comp=calcComp(_sRepTime,b.targetMs);b.completedReps.push({n:s.curRep,time:_sRepTime,targetMs:b.targetMs,comp:comp,restTime:0,splits:takeSplitsForRep(s),strokes:takeStrokes(s),startLag:(s.repStartLag!=null?s.repStartLag:null)});attachStrokeExtra(s,b);s.repStartLag=null;}
   s.state="stopped";s.phase="block-done";stopLoopIfIdle();updateMini(s);if(s.id===selId)renderMP(s);updateGlobalBtns();updateSaveBar();
 }
 function nextBlock(s){
@@ -2149,7 +2181,7 @@ function startAll(){
     if(s.state==="idle"&&s.blocks&&s.blocks.length){
       var b=curBlock(s);
       if(b&&b.isTransition){s.state="transition";s.restStart=now;s.restElapsed=0;}
-      else{s.curRep++;s.repStart=now;s.repElapsed=0;s.state="repping";s.curSplits=[];s.curStrokes=0;}
+      else{s.curRep++;s.repStart=now;s.repElapsed=0;s.state="repping";s.curSplits=[];s.curStrokes=0;s.curStrokeSplits=[];}
       updateMini(s);
     }
   });
@@ -2159,7 +2191,7 @@ function startAll(){
 function stopAll(){
   swimmers.forEach(function(s){
     if(s.state==="repping"||s.state==="resting"||s.state==="transition"){
-      if(s.state==="repping"){s.repElapsed=performance.now()-s.repStart;var b=curBlock(s);var comp=calcComp(s.repElapsed,b?b.targetMs:0);if(b&&b.completedReps)b.completedReps.push({n:s.curRep,time:Math.round(s.repElapsed),targetMs:b?b.targetMs:0,comp:comp,restTime:0,splits:takeSplitsForRep(s),strokes:takeStrokes(s)});}
+      if(s.state==="repping"){s.repElapsed=performance.now()-s.repStart;var b=curBlock(s);var comp=calcComp(s.repElapsed,b?b.targetMs:0);if(b&&b.completedReps)b.completedReps.push({n:s.curRep,time:Math.round(s.repElapsed),targetMs:b?b.targetMs:0,comp:comp,restTime:0,splits:takeSplitsForRep(s),strokes:takeStrokes(s)});attachStrokeExtra(s,b);}
       s.state="stopped";s.phase="block-done";updateMini(s);
     }
   });
@@ -2535,13 +2567,13 @@ document.getElementById("btn-xlsx").addEventListener("click",function(){
       segLbls.push(blockDistM(bl)>0?blockDistM(bl)+"m":"Final");
     }
     var header=["Atleta","Bloque","Rep","Distancia","Objetivo (s)","Objetivo","Tiempo (s)","Tiempo"];
-    var hS=bl.reps.some(function(r){return r.strokes;});if(hC)header.push("Dif (s)","% Intensidad");if(hR)header.push("Descanso");if(hS)header.push("Brazadas","Frec (br/min)","Dist/brazada (m)","Br/25m","SWOLF 25");
+    var hS=bl.reps.some(function(r){return r.strokes;});if(hC)header.push("Dif (s)","% Intensidad");if(hR)header.push("Descanso");if(hS)header.push("Brazadas","Frec (br/min)","Dist/brazada (m)","Br/25m","SWOLF 25","Brazadas por parcial","Resumen brazadas");
     segLbls.forEach(function(l,li){header.push("Acum "+l,"Tramo "+l);if(li>0)header.push("Δ "+l);});
     var rows=[header];
     bl.reps.forEach(function(r){
       var row=[s.name,bl.name,r.n,bl.distance,bl.targetMs>0?parseFloat((bl.targetMs/1000).toFixed(3)):"",bl.targetMs>0?fmtS(bl.targetMs):"",parseFloat((r.time/1000).toFixed(3)),fmtS(r.time)];
       if(hC){if(r.comp)row.push(parseFloat((r.comp.diff/1000).toFixed(3)),parseFloat(r.comp.pctStr));else row.push("","");}
-      if(hR)row.push(r.restTime>0?fmt(r.restTime):"");if(hS){var st=strokeStats(bl,r);if(st)row.push(st.n,+st.rate.toFixed(1),st.dps?+st.dps.toFixed(2):"",st.per25?+st.per25.toFixed(1):"",st.swolf?+st.swolf.toFixed(1):"");else row.push("","","","","");}
+      if(hR)row.push(r.restTime>0?fmt(r.restTime):"");if(hS){var st=strokeStats(bl,r);if(st)row.push(st.n,+st.rate.toFixed(1),st.dps?+st.dps.toFixed(2):"",st.per25?+st.per25.toFixed(1):"",st.swolf?+st.swolf.toFixed(1):"");else row.push("","","","","");var sgx=strokeSegments(bl,r),smx=strokeSummary(sgx);row.push(sgx.map(function(x){return x.label+": "+x.n;}).join(" | "),smx?smx.verdict+" ("+(smx.dif>0?"+":"")+smx.dif.toFixed(1)+" br/25)":"");}
       if(segLbls.length){
         var segs=splitSegments(bl,r);
         for(var sk=0;sk<segLbls.length;sk++){
@@ -2593,6 +2625,7 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
   var p=document.getElementById("btn-strk-plus"),m=document.getElementById("btn-strk-minus");
   p.addEventListener("touchstart",function(e){e.preventDefault();add(1);},{passive:false});p.addEventListener("click",function(){add(1);});
   m.addEventListener("click",function(){add(-1);});
+  document.getElementById("strk-dist").addEventListener("change",function(){var s=sw();if(s)s.strokeDist=parseInt(this.value,10)||0;});
 })();
 document.getElementById("btn-prev-rep").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevRep(s);});
 document.getElementById("btn-prev-block").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevBlock(s);});
