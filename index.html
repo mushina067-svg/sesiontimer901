@@ -501,18 +501,19 @@ body{display:flex;flex-direction:column;}
       <div class="mp-block" id="mp-block"></div>
       <div class="mp-phase" id="mp-phase"></div>
       <div class="mp-tgt" id="mp-tgt"></div>
-      <div class="mp-time" id="mp-time">00:00.000</div>
-      <div class="mp-repinfo" id="mp-repinfo"></div>
-      <div class="mp-splits" id="mp-splits"></div>
-      <div id="mp-strokes" style="display:none;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:6px 14px">
+      <div id="mp-strokes" style="display:none;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;padding:6px 14px;margin-bottom:6px">
         <select class="exp-sel" id="strk-dist" style="flex:0 0 auto;max-width:120px" title="Distancia de la repetición para contar brazadas"><option value="0">Dist: bloque</option><option value="25">25 m</option><option value="50">50 m</option><option value="75">75 m</option><option value="100">100 m</option><option value="200">200 m</option></select>
         <button class="btn-skip" id="btn-strk-minus" style="min-width:56px;font-size:18px">−1</button>
         <button class="btn-skip" id="btn-strk-plus" style="flex:1;max-width:320px;min-height:64px;font-size:20px;font-weight:700;border-color:var(--gb);color:var(--gt);background:var(--gd,transparent)">🏊 Brazada +1 <span id="strk-count">0</span></button>
       </div>
+      <div class="mp-time" id="mp-time">00:00.000</div>
+      <div class="mp-repinfo" id="mp-repinfo"></div>
+      <div class="mp-splits" id="mp-splits"></div>
       <div class="mp-btns" id="mp-btns"></div>
       <div class="mp-skip-row">
         <button class="btn-skip" id="btn-split" style="border-color:var(--bb);color:var(--bt);background:var(--bd);font-weight:600" title="Tocá para marcar un parcial · mantené presionado para deshacer el último">⏱ Parcial</button>
         <button class="btn-skip" id="btn-strk-toggle" title="Activar solo cuando quieras contar brazadas a mano">🏊 Contar brazadas: NO</button>
+        <button class="btn-skip" id="btn-clicker-toggle" title="Contar brazadas con clicker Bluetooth o teclado: +1 con Volume+/↑/Enter/Espacio, −1 con Volume−/↓">⌨️ Clicker: NO</button>
         <button class="btn-skip" id="btn-prev-rep" style="border-color:var(--bb);color:var(--bt)">← Rep</button>
         <button class="btn-skip" id="btn-prev-block" style="border-color:var(--bb);color:var(--bt)">← Bloque</button>
         <button class="btn-skip" id="btn-skip-block">Saltar →</button>
@@ -2626,6 +2627,19 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
   p.addEventListener("touchstart",function(e){e.preventDefault();add(1);},{passive:false});p.addEventListener("click",function(){add(1);});
   m.addEventListener("click",function(){add(-1);});
   document.getElementById("strk-dist").addEventListener("change",function(){var s=sw();if(s)s.strokeDist=parseInt(this.value,10)||0;});
+  var ct=document.getElementById("btn-clicker-toggle");
+  ct.addEventListener("click",function(){var s=sw();if(!s)return;s.clickerOn=!s.clickerOn;ct.textContent="⌨️ Clicker: "+(s.clickerOn?"SÍ":"NO");ct.style.borderColor=s.clickerOn?"var(--gb)":"";ct.style.color=s.clickerOn?"var(--gt)":"";});
+  document.addEventListener("keydown",function(e){
+    var s=sw();if(!s||!s.clickerOn||!s.strokeOn||s.state!=="repping")return;
+    var t=e.target&&e.target.tagName;
+    if(t==="INPUT"||t==="SELECT"||t==="TEXTAREA")return;
+    var k=e.key;
+    var plus=(k==="AudioVolumeUp"||k==="ArrowUp"||k==="PageUp"||k===" "||k==="Spacebar"||k==="Enter");
+    var minus=(k==="AudioVolumeDown"||k==="ArrowDown"||k==="PageDown");
+    if(!plus&&!minus)return;
+    e.preventDefault();
+    add(plus?1:-1);
+  });
 })();
 document.getElementById("btn-prev-rep").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevRep(s);});
 document.getElementById("btn-prev-block").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevBlock(s);});
