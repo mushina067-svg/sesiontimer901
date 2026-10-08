@@ -513,7 +513,8 @@ body{display:flex;flex-direction:column;}
       <div class="mp-skip-row">
         <button class="btn-skip" id="btn-split" style="border-color:var(--bb);color:var(--bt);background:var(--bd);font-weight:600" title="Tocá para marcar un parcial · mantené presionado para deshacer el último">⏱ Parcial</button>
         <button class="btn-skip" id="btn-strk-toggle" title="Activar solo cuando quieras contar brazadas a mano">🏊 Contar brazadas: NO</button>
-        <button class="btn-skip" id="btn-clicker-toggle" title="Contar brazadas con clicker Bluetooth o teclado: +1 con Volume+/↑/Enter/Espacio, −1 con Volume−/↓">⌨️ Clicker: NO</button>
+        <button class="btn-skip" id="btn-clicker-toggle" title="Contar brazadas y parciales con clicker Bluetooth o teclado: +1 con Volume+/↑/Enter/Espacio, −1 con Volume−/↓, Parcial con →, deshacer parcial con ←">⌨️ Clicker: NO</button>
+        <span id="clk-diag" style="display:none;font-size:13px;padding:6px 10px;border:1px dashed var(--gb);border-radius:8px;color:var(--gt)">Mando: apretá un botón…</span>
         <button class="btn-skip" id="btn-prev-rep" style="border-color:var(--bb);color:var(--bt)">← Rep</button>
         <button class="btn-skip" id="btn-prev-block" style="border-color:var(--bb);color:var(--bt)">← Bloque</button>
         <button class="btn-skip" id="btn-skip-block">Saltar →</button>
@@ -2628,12 +2629,20 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
   m.addEventListener("click",function(){add(-1);});
   document.getElementById("strk-dist").addEventListener("change",function(){var s=sw();if(s)s.strokeDist=parseInt(this.value,10)||0;});
   var ct=document.getElementById("btn-clicker-toggle");
-  ct.addEventListener("click",function(){var s=sw();if(!s)return;s.clickerOn=!s.clickerOn;ct.textContent="⌨️ Clicker: "+(s.clickerOn?"SÍ":"NO");ct.style.borderColor=s.clickerOn?"var(--gb)":"";ct.style.color=s.clickerOn?"var(--gt)":"";});
+  ct.addEventListener("click",function(){var s=sw();if(!s)return;s.clickerOn=!s.clickerOn;ct.textContent="⌨️ Clicker: "+(s.clickerOn?"SÍ":"NO");ct.style.borderColor=s.clickerOn?"var(--gb)":"";ct.style.color=s.clickerOn?"var(--gt)":"";var dg=document.getElementById("clk-diag");if(dg){dg.style.display=s.clickerOn?"inline-block":"none";dg.textContent="Mando: apretá un botón…";}ct.blur();});
   document.addEventListener("keydown",function(e){
-    var s=sw();if(!s||!s.clickerOn||!s.strokeOn||s.state!=="repping")return;
+    var s=sw();if(!s||!s.clickerOn)return;
     var t=e.target&&e.target.tagName;
     if(t==="INPUT"||t==="SELECT"||t==="TEXTAREA")return;
-    var k=e.key;
+    var kc=e.keyCode||e.which,k=e.key;
+    var map={13:"Enter",32:" ",33:"PageUp",34:"PageDown",37:"ArrowLeft",38:"ArrowUp",39:"ArrowRight",40:"ArrowDown",175:"AudioVolumeUp",174:"AudioVolumeDown"};
+    if(!k||k==="Unidentified"||k==="UIKeyInputUpArrow"){k=map[kc]||k;}
+    if(k==="UIKeyInputUpArrow")k="ArrowUp";if(k==="UIKeyInputDownArrow")k="ArrowDown";if(k==="UIKeyInputLeftArrow")k="ArrowLeft";if(k==="UIKeyInputRightArrow")k="ArrowRight";
+    var dg=document.getElementById("clk-diag");if(dg){dg.textContent="Mando recibido: "+(k===" "?"Espacio":k)+" ("+kc+")";}
+    if(s.state!=="repping"){if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"," ","PageUp","PageDown"].indexOf(k)>=0)e.preventDefault();return;}
+    if(k==="ArrowRight"||k==="p"||k==="P"){e.preventDefault();takeSplit(s);return;}
+    if(k==="ArrowLeft"||k==="u"||k==="U"){e.preventDefault();if(s.curSplits&&s.curSplits.length)undoSplit(s);return;}
+    if(!s.strokeOn)return;
     var plus=(k==="AudioVolumeUp"||k==="ArrowUp"||k==="PageUp"||k===" "||k==="Spacebar"||k==="Enter");
     var minus=(k==="AudioVolumeDown"||k==="ArrowDown"||k==="PageDown");
     if(!plus&&!minus)return;
