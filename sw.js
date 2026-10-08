@@ -1,5 +1,5 @@
 /* W·Timer service worker — cache del app shell + libreria de Excel */
-const CACHE = 'wtimer-v43';
+const CACHE = 'wtimer-v44';
 const SHELL = [
   './',
   './index.html',

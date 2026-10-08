@@ -2654,6 +2654,9 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
   function diag(txt){var dg=document.getElementById("clk-diag");if(dg)dg.textContent="Mando recibido: "+txt;}
   function act(kind,label){
     var s=sw();if(!s||!s.clickerOn)return false;
+    var waitingManual=!!document.getElementById("_race-manual-delta")&&s.state!=="repping";
+    if(waitingManual&&kind==="timer"){startRepManual(s);diag(label+" → ▶ Cronómetro iniciado (partida manual)");return true;}
+    if(waitingManual&&kind==="undo"){cancelManualWait(s);diag(label+" → ✕ Partida cancelada");return true;}
     if(kind==="timer"){
       if(s.state==="idle"||s.state==="resting"){var bb=curBlock(s);var cp=bb&&!bb.isTransition&&blockIsConPartida(bb);
         if(s.state==="idle"){if(cp)startRepWithRaceStart(s);else startRep(s);}else{if(cp)startNextRepWithRaceStart(s);else startNextRep(s);}
