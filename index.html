@@ -2639,7 +2639,7 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
     if(!k||k==="Unidentified"||k==="UIKeyInputUpArrow"){k=map[kc]||k;}
     if(k==="UIKeyInputUpArrow")k="ArrowUp";if(k==="UIKeyInputDownArrow")k="ArrowDown";if(k==="UIKeyInputLeftArrow")k="ArrowLeft";if(k==="UIKeyInputRightArrow")k="ArrowRight";
     var dg=document.getElementById("clk-diag");if(dg){dg.textContent="Mando recibido: "+(k===" "?"Espacio":k)+" ("+kc+")";}
-    if(s.state!=="repping"){if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"," ","PageUp","PageDown"].indexOf(k)>=0)e.preventDefault();if(k==="ArrowDown"&&s.state==="idle"){startRep(s);}return;}
+    if(s.state!=="repping"){if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Enter"," ","PageUp","PageDown"].indexOf(k)>=0)e.preventDefault();if(k==="ArrowDown"){act("timer","tecla ↓");}return;}
     if(k==="ArrowRight"||k==="p"||k==="P"){e.preventDefault();takeSplit(s);return;}
     if(k==="ArrowLeft"||k==="u"||k==="U"){e.preventDefault();if(s.curSplits&&s.curSplits.length)undoSplit(s);return;}
     if(k==="ArrowDown"){e.preventDefault();endRep(s);return;}
@@ -2655,7 +2655,10 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
   function act(kind,label){
     var s=sw();if(!s||!s.clickerOn)return false;
     if(kind==="timer"){
-      if(s.state==="idle"){startRep(s);diag(label+" → ▶ Cronómetro iniciado");}
+      if(s.state==="idle"||s.state==="resting"){var bb=curBlock(s);var cp=bb&&!bb.isTransition&&blockIsConPartida(bb);
+        if(s.state==="idle"){if(cp)startRepWithRaceStart(s);else startRep(s);}else{if(cp)startNextRepWithRaceStart(s);else startNextRep(s);}
+        diag(label+" → ▶ Cronómetro iniciado");}
+      else if(s.state==="transition"){var tb=document.querySelector("#mp-btns .bb.start");if(tb){tb.click();diag(label+" → ▶ Siguiente");}else diag(label+" — no aplica en este momento");}
       else if(s.state==="repping"){endRep(s);diag(label+" → ⏹ Fin de repetición");}
       else{diag(label+" — no aplica en este momento");}
       return true;
