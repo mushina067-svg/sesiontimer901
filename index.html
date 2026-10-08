@@ -2649,6 +2649,61 @@ document.getElementById("btn-saveall").addEventListener("click",function(){
     e.preventDefault();
     add(plus?1:-1);
   });
+  // ---- v40: detector ampliado + mando en modo multimedia / mouse ----
+  function diag(txt){var dg=document.getElementById("clk-diag");if(dg)dg.textContent="Mando recibido: "+txt;}
+  function act(kind,label){
+    var s=sw();if(!s||!s.clickerOn)return false;
+    diag(label);
+    if(s.state!=="repping")return true;
+    if(kind==="split"){takeSplit(s);}
+    else if(kind==="undo"){if(s.curSplits&&s.curSplits.length)undoSplit(s);}
+    else if(kind==="plus"){if(s.strokeOn)add(1);}
+    else if(kind==="minus"){if(s.strokeOn)add(-1);}
+    return true;
+  }
+  document.addEventListener("keyup",function(e){var s=sw();if(!s||!s.clickerOn)return;var dg=document.getElementById("clk-diag");if(dg&&dg.textContent.indexOf("apretá")>=0)diag("tecla soltada ("+(e.key||e.keyCode)+")");});
+  // Teclas multimedia (play/pausa, siguiente, anterior) via Media Session
+  var silentAudio=null;
+  function silentWav(){var n=8000,b=new Uint8Array(44+n),v=new DataView(b.buffer);function w(o,t){for(var i=0;i<t.length;i++)b[o+i]=t.charCodeAt(i);}
+    w(0,"RIFF");v.setUint32(4,36+n,true);w(8,"WAVEfmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,8000,true);v.setUint32(28,8000,true);v.setUint16(32,1,true);v.setUint16(34,8,true);w(36,"data");v.setUint32(40,n,true);for(var i=0;i<n;i++)b[44+i]=128;
+    var bin="";for(var j=0;j<b.length;j++)bin+=String.fromCharCode(b[j]);return "data:audio/wav;base64,"+btoa(bin);}
+  function startMedia(){
+    try{
+      if(!silentAudio){silentAudio=new Audio(silentWav());silentAudio.loop=true;silentAudio.setAttribute("playsinline","");}
+      var pr=silentAudio.play();if(pr&&pr.catch)pr.catch(function(){});
+      if("mediaSession" in navigator){
+        try{navigator.mediaSession.metadata=new MediaMetadata({title:"W·Timer — mando activo",artist:"Wottrich"});}catch(e){}
+        var H={play:["plus","Play"],pause:["plus","Pausa"],nexttrack:["split","Siguiente ⏭"],previoustrack:["undo","Anterior ⏮"],seekforward:["split","Adelantar"],seekbackward:["undo","Retroceder"]};
+        Object.keys(H).forEach(function(a){try{navigator.mediaSession.setActionHandler(a,function(){act(H[a][0],"multimedia "+H[a][1]);try{silentAudio.play();navigator.mediaSession.playbackState="playing";}catch(e){}});}catch(e){}});
+        try{navigator.mediaSession.playbackState="playing";}catch(e){}
+      }
+    }catch(e){}
+  }
+  function stopMedia(){try{if(silentAudio)silentAudio.pause();}catch(e){}}
+  ct.addEventListener("click",function(){var s=sw();if(!s)return;if(s.clickerOn)startMedia();else if(!swimmers.some(function(x){return x.clickerOn;}))stopMedia();});
+  // Mando en modo mouse / puntero (TikTok, "iOS"): solo pointerType mouse/pen, nunca el dedo
+  var pd=null,blockClickUntil=0;
+  document.addEventListener("pointerdown",function(e){
+    var s=sw();if(!s||!s.clickerOn)return;
+    if(e.pointerType==="touch")return;
+    pd={x:e.clientX,y:e.clientY,t:Date.now()};e.preventDefault();e.stopPropagation();
+  },true);
+  document.addEventListener("pointerup",function(e){
+    var s=sw();if(!s||!s.clickerOn||!pd||e.pointerType==="touch"){pd=null;return;}
+    var dx=e.clientX-pd.x,dy=e.clientY-pd.y;pd=null;blockClickUntil=Date.now()+500;
+    e.preventDefault();e.stopPropagation();
+    if(Math.abs(dx)<25&&Math.abs(dy)<25){act("plus","clic de mouse");return;}
+    if(Math.abs(dy)>=Math.abs(dx)){if(dy<0)act("plus","deslizar ↑");else act("minus","deslizar ↓");}
+    else{if(dx>0)act("split","deslizar →");else act("undo","deslizar ←");}
+  },true);
+  document.addEventListener("click",function(e){if(Date.now()<blockClickUntil){e.preventDefault();e.stopPropagation();}},true);
+  var wheelT=0;
+  document.addEventListener("wheel",function(e){
+    var s=sw();if(!s||!s.clickerOn)return;
+    e.preventDefault();var now=Date.now();if(now-wheelT<250)return;wheelT=now;
+    if(Math.abs(e.deltaY)>=Math.abs(e.deltaX)){if(e.deltaY<0)act("plus","rueda ↑");else act("minus","rueda ↓");}
+    else{if(e.deltaX>0)act("split","rueda →");else act("undo","rueda ←");}
+  },{passive:false});
 })();
 document.getElementById("btn-prev-rep").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevRep(s);});
 document.getElementById("btn-prev-block").addEventListener("click",function(){var s=swimmers.find(function(x){return x.id===selId;});if(s)prevBlock(s);});
