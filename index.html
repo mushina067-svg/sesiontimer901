@@ -72,7 +72,7 @@ body{display:flex;flex-direction:column;}
 .mb-sec-title{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:4px;}
 .mb-sec-title.warmup{background:var(--surf3);color:var(--muted);}
 .mb-sec-title.activacion{background:var(--ad);color:var(--at);}
-.mb-sec-title.preserie{background:var(--pd);color:var(--pt);}
+.mb-sec-title.estilos{background:var(--pd);color:var(--pt);}
 .mb-sec-title.serie{background:var(--rd);color:var(--rt);}
 .btn-add-sub{padding:3px 10px;border-radius:4px;border:.5px solid var(--gb);background:var(--gd);color:var(--gt);font-size:12px;cursor:pointer;font-family:inherit;}
 .mb-subs{padding:0 8px 8px;}
@@ -361,7 +361,7 @@ body{display:flex;flex-direction:column;}
 .tpl-sec-title{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:4px;}
 .tpl-sec-title.warmup{background:var(--surf3);color:var(--muted);}
 .tpl-sec-title.activacion{background:var(--ad);color:var(--at);}
-.tpl-sec-title.preserie{background:var(--pd);color:var(--pt);}
+.tpl-sec-title.estilos{background:var(--pd);color:var(--pt);}
 .tpl-sec-title.serie{background:var(--rd);color:var(--rt);}
 .tpl-subs{padding:0 8px 8px;}
 .tpl-sub{background:var(--surf3);border-radius:var(--rs);border:.5px solid var(--b1);padding:7px;margin-top:6px;}
@@ -558,6 +558,7 @@ body{display:flex;flex-direction:column;}
       <div style="padding:10px 14px 0;">
         <input type="text" class="tpl-name-inp" id="tpl-new-name" placeholder="Nombre de la plantilla (ej: RV 100m)" style="width:100%;margin-bottom:8px;">
       </div>
+      <div style="padding:0 14px 10px"><label for="tpl-sestype" style="font-size:11px;color:var(--muted)">Tipo de sesión</label><select id="tpl-sestype" style="width:100%;padding:8px;background:var(--surf2);color:var(--text);border:.5px solid var(--b2);border-radius:var(--rs)"></select></div>
       <!-- WARMUP -->
       <div class="tpl-section" id="tpl-sec-warmup">
         <div class="tpl-sec-hdr">
@@ -596,16 +597,16 @@ body{display:flex;flex-direction:column;}
         <input type="text" class="tpl-tr-inp" id="tpl-tr2" placeholder="ej: 3 min">
         <div class="tpl-tr-line"></div>
       </div>
-      <!-- PRE-SERIE -->
-      <div class="tpl-section" id="tpl-sec-preserie">
+      <!-- ESTILOS -->
+      <div class="tpl-section" id="tpl-sec-estilos">
         <div class="tpl-sec-hdr">
-          <span class="tpl-sec-title preserie">Pre-serie</span>
-          <button class="btn-add-sub" onclick="tplAddSub('preserie')">+ Sub-bloque</button>
+          <span class="tpl-sec-title estilos">Estilos</span>
+          <button class="btn-add-sub" onclick="tplAddSub('estilos')">+ Sub-bloque</button>
         </div>
-        <div class="tpl-subs" id="tpl-subs-preserie"></div>
+        <div class="tpl-subs" id="tpl-subs-estilos"></div>
         <div style="padding:0 8px 6px;display:flex;align-items:center;gap:6px;">
           <span style="font-size:10px;color:var(--faint);">Metros sección:</span>
-          <input type="number" id="tpl-meters-preserie" placeholder="ej: 400" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
+          <input type="number" id="tpl-meters-estilos" placeholder="ej: 400" style="width:80px;padding:4px 7px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf3);color:var(--muted);font-size:12px;font-family:var(--mono);">
         </div>
       </div>
       <!-- TRANSICIÓN 3 -->
@@ -713,6 +714,62 @@ window._wtXlsxReady = function(){
 };
 </script>
 <script>
+// Session layouts share one source of truth across manual plans, templates and reports.
+var SESSION_LAYOUTS={
+  GLUCOLISIS:["warmup","estilos","activacion","serie"],
+  FOSFAGENO:["warmup","activacion","serie"],
+  "CONTROL DE TIEMPO":["warmup","activacion","serie"],
+  UMBRAL:["warmup","activacion","serie"]
+};
+function sessionKind(value){
+  var v=String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
+  if(v.indexOf("GLUCOLISIS")===0)return "GLUCOLISIS";
+  if(v.indexOf("FOSFAGENO")===0)return "FOSFAGENO";
+  if(v.indexOf("CONTROL")===0)return "CONTROL DE TIEMPO";
+  if(v.indexOf("UMBRAL")===0)return "UMBRAL";
+  return "";
+}
+function sessionSections(value){return (SESSION_LAYOUTS[sessionKind(value)]||["warmup","activacion","estilos","serie"]).slice();}
+function sessionSectionLabel(sec,value){return sec==="warmup"?"Calentamiento":sec==="estilos"?"Estilos":sec==="activacion"?"Activación":sessionKind(value)==="CONTROL DE TIEMPO"?"Test":"Serie";}
+function sessionBlockType(sec,value){return sec!=="serie"?sec:sessionKind(value)==="CONTROL DE TIEMPO"?"control":"velocity";}
+function timerTypeOptions(value){
+  var types=["GLUCOLISIS","FOSFAGENO","CONTROL DE TIEMPO","UMBRAL","Potencia / Fuerza en Agua","TECNICA/DESCARGA"];
+  if(value&&types.indexOf(value)<0)types.push(value);
+  return '<option value="">Seleccionar tipo...</option>'+types.map(function(t){return '<option value="'+esc(t)+'"'+(value===t?' selected':'')+'>'+esc(t)+'</option>';}).join("");
+}
+function layoutValue(swid){var el=document.getElementById(swid?"mb-sestype-"+swid:"tpl-sestype");return el?el.value:"";}
+function sectionTransitionIndex(sec,value){return sessionSections(value).indexOf(sec)+1;}
+function syncSessionLayout(swid){
+  var value=layoutValue(swid),order=sessionSections(value),isManual=!!swid;
+  var root=document.getElementById(isManual?"manual-"+swid:"tpl-builder");if(!root)return;
+  var anchor=isManual?document.getElementById("mb-total-"+swid):document.getElementById("tpl-total");if(!anchor)return;
+  ["warmup","activacion","estilos","serie"].forEach(function(sec){
+    var subs=document.getElementById(isManual?"mb-subs-"+swid+"-"+sec:"tpl-subs-"+sec);
+    var node=subs&&subs.closest(isManual?".mb-section":".tpl-section");
+    if(node){node.style.display=order.indexOf(sec)<0?"none":"";var title=node.querySelector(isManual?".mb-sec-title":".tpl-sec-title");if(title)title.textContent=sessionSectionLabel(sec,value);}
+  });
+  var transitions=[1,2,3].map(function(n){var inp=document.getElementById(isManual?"mb-tr"+n+"-"+swid:"tpl-tr"+n);return inp&&inp.closest(isManual?".mb-transition":".tpl-tr-row");});
+  transitions.forEach(function(n){if(n)n.style.display="none";});
+  order.forEach(function(sec,i){
+    var subs=document.getElementById(isManual?"mb-subs-"+swid+"-"+sec:"tpl-subs-"+sec);
+    var node=subs&&subs.closest(isManual?".mb-section":".tpl-section");if(node)anchor.parentNode.insertBefore(node,anchor);
+    if(i<order.length-1&&transitions[i]){transitions[i].style.display="";anchor.parentNode.insertBefore(transitions[i],anchor);}
+  });
+  recalcMeters();
+}
+function migrateLegacySections(blocks){(blocks||[]).forEach(function(b){if(b.type==="preserie")b.type="estilos";});return blocks;}
+function assembleSessionSections(value,getBlocks,getMeters,getTransition){
+  var order=sessionSections(value),out=[];
+  var groups=order.map(function(sec){var bs=getBlocks(sec,sessionBlockType(sec,value));var m=getMeters(sec);if(bs.length&&m>0)bs[0].sectionMeters=m;return {sec:sec,blocks:bs};});
+  groups.forEach(function(g,i){
+    if(!g.blocks.some(function(b){return !b.isTransition;}))return;
+    g.blocks.forEach(function(b){out.push(b);});
+    var dur=getTransition(i+1);
+    if(dur>0&&groups.slice(i+1).some(function(x){return x.blocks.some(function(b){return !b.isTransition;});}))out.push({type:"transition",name:"Descanso "+fmtSec(dur),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:dur});
+  });
+  return out;
+}
+
 // ── EVENTS ──────────────────────────────────────────────────────
 var EVENTS=["5m", "10m", "10m con partida", "15m desde pared", "15m con partida", "15m Espalda con partida", "15m Pecho con partida", "15m Mariposa con partida", "15m Libre con partida", "25m Libre", "25m Libre con partida", "25m Mariposa", "25m Mariposa con partida", "25m Pecho", "25m Pecho con partida", "25m Espalda", "25m Espalda con partida", "25m Espalda con Aleta con partida", "25m Pecho con Aleta con partida", "25m Mariposa con Aleta con partida", "25m Libre con Aleta con partida", "25m Subacuático sin Aleta con partida", "25m Subacuático con Aleta con partida", "25m Pateo Espalda con Aleta con partida", "25m Pateo Pecho con Aleta con partida", "25m Pateo Mariposa con Aleta con partida", "25m Pateo Libre con Aleta con partida", "25m Pateo Espalda con partida", "25m Pateo Pecho con partida", "25m Pateo Mariposa con partida", "25m Pateo Libre con partida", "25m Pateo Libre", "25m Pateo Libre con Aleta", "25m Subacuático con Aleta", "25m Subacuático sin Aleta", "25m Pateo Pecho con Aleta", "25m Pateo Pecho sin Aleta", "25m Pateo Espalda con Aleta", "25m Pateo Espalda sin Aleta", "25m Pateo Mariposa sin Aleta", "25m Pateo Mariposa con Aleta", "25m Mariposa c/par c/aleta", "50m /25 pat 25 libre", "50m /25 pat 25 mariposa", "50m /25 pat 25 pecho", "50m /25 pat 25 espalda", "25m libre c/par c/aleta", "35m Libre", "35m Libre con partida", "35m Mariposa", "35m Mariposa con partida", "35m Pecho", "35m Pecho con partida", "35m Espalda", "35m Espalda con partida", "50m Libre", "50m Libre con partida", "50m Mariposa", "50m Mariposa con partida", "50m Pecho", "50m Pecho con partida", "50m Espalda", "50m Espalda con partida", "50m Comb Espalda", "50m Comb Pecho", "50m Comb Mariposa", "65m Libre", "65m Libre con partida", "65m Mariposa", "65m Mariposa con partida", "65m Pecho", "65m Pecho con partida", "65m Espalda", "65m Espalda con partida", "75m Libre", "75m Libre con partida", "75m Mariposa", "75m Mariposa con partida", "75m Pecho", "75m Pecho con partida", "75m Espalda", "75m Espalda con partida", "100m Libre", "100m Libre con partida", "100m Mariposa", "100m Mariposa con partida", "100m Pecho", "100m Pecho con partida", "100m Espalda", "100m Espalda con partida", "100m Combinado", "200m Libre", "200m Libre con partida", "200m Mariposa", "200m Mariposa con partida", "200m Pecho", "200m Pecho con partida", "200m Espalda", "200m Espalda con partida", "400m Libre", "400m Combinado", "800m Libre", "Otro"];
 var MB_DISTS=["5m", "10m", "10m con partida", "15m sin partida", "15m con partida", "15m espalda con partida", "15m pecho con partida", "15m mariposa con partida", "15m libre con partida", "25m subacuático", "25m pateo libre", "25m pateo libre con aleta", "25m subacuático con aleta", "25m subacuático sin aleta", "25m pateo pecho con aleta", "25m pateo pecho sin aleta", "25m pateo espalda con aleta", "25m pateo espalda sin aleta", "25m pateo mariposa sin aleta", "25m pateo mariposa con aleta", "25m pateo mariposa", "25m pateo pecho", "25m pateo espalda", "25m libre", "25m libre con partida", "25m libre c/par c/aleta", "25m mariposa", "25m mariposa con partida", "25m mariposa c/par c/aleta", "25m pecho", "25m pecho con partida", "25m espalda", "25m espalda con partida", "25m espalda con aleta con partida", "25m pecho con aleta con partida", "25m mariposa con aleta con partida", "25m libre con aleta con partida", "25m subacuático sin aleta con partida", "25m subacuático con aleta con partida", "25m pateo espalda con aleta con partida", "25m pateo pecho con aleta con partida", "25m pateo mariposa con aleta con partida", "25m pateo libre con aleta con partida", "25m pateo espalda con partida", "25m pateo pecho con partida", "25m pateo mariposa con partida", "25m pateo libre con partida", "35m libre", "35m libre con partida", "35m mariposa", "35m mariposa con partida", "35m pecho", "35m pecho con partida", "35m espalda", "35m espalda con partida", "50m libre", "50m libre con partida", "50m /25 pat 25 libre", "50m /25 pat 25 mariposa", "50m /25 pat 25 pecho", "50m /25 pat 25 espalda", "50m mariposa", "50m mariposa con partida", "50m pecho", "50m pecho con partida", "50m espalda", "50m espalda con partida", "50m comb espalda", "50m comb pecho", "50m comb mariposa", "65m libre", "65m libre con partida", "65m mariposa", "65m mariposa con partida", "65m pecho", "65m pecho con partida", "65m espalda", "65m espalda con partida", "75m libre", "75m libre con partida", "75m mariposa", "75m mariposa con partida", "75m pecho", "75m pecho con partida", "75m espalda", "75m espalda con partida", "100m libre", "100m libre con partida", "100m mariposa", "100m mariposa con partida", "100m pecho", "100m pecho con partida", "100m espalda", "100m espalda con partida", "100m combinado", "200m libre", "200m libre con partida", "200m mariposa", "200m mariposa con partida", "200m pecho", "200m pecho con partida", "200m espalda", "200m espalda con partida", "400m libre", "800m"];
@@ -762,7 +819,7 @@ function renderCards(){
   var todayDesc=today&&today.type!=="rest"&&today.type!=="competition"?today.desc+" ("+today.pct+")":"Sin sesión programada hoy";
   var prompt="";
   if(today&&today.type!=="rest"&&today.type!=="competition"){
-    prompt="Generá la sesión para [ATLETA]: "+today.desc+" "+today.pct+". Devolvé SOLO un array JSON con esta estructura:\n[{\"type\":\"warmup\",\"name\":\"Calentamiento\",\"reps\":8,\"distance\":\"100m\",\"distKey\":\"100m\",\"intensity\":0,\"restSec\":90,\"targetMs\":66500,\"note\":\"descripcion\"},{\"type\":\"activacion\",...},{\"type\":\"preserie\",...},{\"type\":\"rv\",...}]";
+    prompt="Generá la sesión para [ATLETA]: "+today.desc+" "+today.pct+". Devolvé SOLO un array JSON con esta estructura:\n[{\"type\":\"warmup\",\"name\":\"Calentamiento\",\"reps\":8,\"distance\":\"100m\",\"distKey\":\"100m\",\"intensity\":0,\"restSec\":90,\"targetMs\":66500,\"note\":\"descripcion\"},{\"type\":\"estilos\",...},{\"type\":\"activacion\",...},{\"type\":\"rv\",...}]";
   }
   var html="";
   swimmers.forEach(function(s){
@@ -773,7 +830,7 @@ function renderCards(){
     var swDesc=swMC&&swMC.type!=="rest"&&swMC.type!=="competition"?swMC.desc+" ("+swMC.pct+")":"Sin sesión programada";
     var swPrompt="";
     if(swMC&&swMC.type!=="rest"&&swMC.type!=="competition"){
-      swPrompt="Generá la sesión para "+s.name+": "+swMC.desc+" "+swMC.pct+". Devolvé SOLO un array JSON con esta estructura:\n[{\"type\":\"warmup\",\"name\":\"Calentamiento\",\"reps\":8,\"distance\":\"100m\",\"distKey\":\"100m\",\"intensity\":0,\"restSec\":90,\"targetMs\":66500,\"note\":\"descripcion\"},{\"type\":\"activacion\",...},{\"type\":\"preserie\",...},{\"type\":\"rv\",...}]";
+      swPrompt="Generá la sesión para "+s.name+": "+swMC.desc+" "+swMC.pct+". Devolvé SOLO un array JSON con esta estructura:\n[{\"type\":\"warmup\",\"name\":\"Calentamiento\",\"reps\":8,\"distance\":\"100m\",\"distKey\":\"100m\",\"intensity\":0,\"restSec\":90,\"targetMs\":66500,\"note\":\"descripcion\"},{\"type\":\"estilos\",...},{\"type\":\"activacion\",...},{\"type\":\"rv\",...}]";
     }
     html+='<div class="sw-card" id="swcard-'+s.id+'">'
       +'<div class="sw-card-top">'
@@ -782,7 +839,7 @@ function renderCards(){
         +'<button class="btn-rem" data-id="'+s.id+'">×</button>'
       +'</div>'
       +'<div class="sw-card-body">'
-        +'<div class="sc-today" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+'<span style="white-space:nowrap;font-size:11px;color:var(--muted);">Sesión:</span>'+'<select id="sw-sestype-'+s.id+'" data-swid="'+s.id+'" class="sw-sestype-sel" style="flex:1;padding:5px 8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--gt);font-size:12px;font-family:inherit;appearance:none;-webkit-appearance:none;">'+'<option value="">Seleccionar tipo...</option>'+'<option value="FOSFAGENO/GLUCOLISIS"'+(s.sessionType==="FOSFAGENO/GLUCOLISIS"?' selected':'')+'>FOSFAGENO/GLUCOLISIS</option>'+'<option value="GLUCOLISIS/FOSFAGENO"'+(s.sessionType==="GLUCOLISIS/FOSFAGENO"?' selected':'')+'>GLUCOLISIS/FOSFAGENO</option>'+'<option value="Potencia / Fuerza en Agua"'+(s.sessionType==="Potencia / Fuerza en Agua"?' selected':'')+'>Potencia / Fuerza en Agua</option>'+'<option value="CONTROL DE TIEMPO"'+(s.sessionType==="CONTROL DE TIEMPO"?' selected':'')+'>CONTROL DE TIEMPO</option>'+'<option value="TECNICA/DESCARGA"'+(s.sessionType==="TECNICA/DESCARGA"?' selected':'')+'>TECNICA/DESCARGA</option>'+'</select>'+'</div>'
+        +'<div class="sc-today" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+'<span style="white-space:nowrap;font-size:11px;color:var(--muted);">Sesión:</span>'+'<select id="sw-sestype-'+s.id+'" data-swid="'+s.id+'" class="sw-sestype-sel" style="flex:1;padding:5px 8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--gt);font-size:12px;font-family:inherit;appearance:none;-webkit-appearance:none;">'+timerTypeOptions(s.sessionType||'')+'</select>'+'</div>'
         +(hasSess?'<div class="session-ok" style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">'+
           '<span>✓ Sesión cargada — '+s.blocks.filter(function(b){return!b.isTransition;}).length+' bloques</span>'+
           '<div style="display:flex;gap:5px;">'+
@@ -828,7 +885,7 @@ function renderCards(){
   cont.querySelectorAll(".sw-sestype-sel").forEach(function(sel){
     sel.addEventListener("change",function(){
       var sw=swimmers.find(function(s){return s.id===sel.dataset.swid;});
-      if(sw){sw.sessionType=sel.value;saveSessions();}
+      if(sw){sw.sessionType=sel.value;var m=document.getElementById("mb-sestype-"+sw.id);if(m)m.value=sel.value;syncSessionLayout(sw.id);saveSessions();}
     });
   });
       if(sw){
@@ -847,7 +904,7 @@ function renderCards(){
   cont.querySelectorAll(".sw-sestype-sel").forEach(function(sel){
     sel.addEventListener("change",function(){
       var sw=swimmers.find(function(s){return s.id===sel.dataset.swid;});
-      if(sw){sw.sessionType=sel.value;saveSessions();}
+      if(sw){sw.sessionType=sel.value;var m=document.getElementById("mb-sestype-"+sw.id);if(m)m.value=sel.value;syncSessionLayout(sw.id);saveSessions();}
     });
   });
   cont.querySelectorAll("[data-action]").forEach(function(b){
@@ -936,12 +993,7 @@ function buildManualPanelHTML(swid){
   return '<div style="margin-bottom:8px">'
     +'<label style="font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Tipo de sesión</label>'
     +'<select id="mb-sestype-'+swid+'" style="width:100%;padding:8px 10px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--text);font-size:13px;font-family:inherit;appearance:none;-webkit-appearance:none;">'
-    +'<option value="">Seleccionar tipo...</option>'
-    +'<option value="FOSFAGENO/GLUCOLISIS">FOSFAGENO/GLUCOLISIS</option>'
-    +'<option value="GLUCOLISIS/FOSFAGENO">GLUCOLISIS/FOSFAGENO</option>'
-    +'<option value="Potencia / Fuerza en Agua">Potencia / Fuerza en Agua</option>'
-    +'<option value="CONTROL DE TIEMPO">CONTROL DE TIEMPO</option>'
-    +'<option value="TECNICA/DESCARGA">TECNICA/DESCARGA</option>'
+    +timerTypeOptions((swimmers.find(function(x){return x.id===swid;})||{}).sessionType||'')
     +'</select>'
   +'</div>'
   +'<div class="mb-section">'
@@ -967,14 +1019,14 @@ function buildManualPanelHTML(swid){
   +'</div>'
   +'<div class="mb-transition"><div class="mb-tr-line"></div><span class="mb-tr-lbl">Descanso transición</span><input type="text" class="mb-tr-input" id="mb-tr2-'+swid+'" value="3 min"><div class="mb-tr-line"></div></div>'
   +'<div class="mb-section">'
-    +'<div class="mb-sec-hdr"><span class="mb-sec-title preserie">Pre-serie</span>'
+    +'<div class="mb-sec-hdr"><span class="mb-sec-title estilos">Estilos</span>'
       +'<div style="display:flex;align-items:center;gap:6px">'
-        +''+'<input type="number" id="mb-meters-'+swid+'-preserie" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
+        +''+'<input type="number" id="mb-meters-'+swid+'-estilos" placeholder="metros" min="0" style="width:80px;padding:3px 6px;border-radius:4px;border:.5px solid var(--b2);background:var(--surf3);color:var(--at);font-size:11px;font-family:var(--mono);text-align:right;">'
         +'<span style="font-size:10px;color:var(--faint)">m</span>'
-        +'<button class="btn-add-sub" data-action="add-sub" data-swid="'+swid+'" data-sec="preserie">+ Sub-bloque</button>'
+        +'<button class="btn-add-sub" data-action="add-sub" data-swid="'+swid+'" data-sec="estilos">+ Sub-bloque</button>'
       +'</div>'
     +'</div>'
-    +'<div class="mb-subs" id="mb-subs-'+swid+'-preserie">'+subHTML('preserie',0)+'</div>'
+    +'<div class="mb-subs" id="mb-subs-'+swid+'-estilos">'+subHTML('estilos',0)+'</div>'
   +'</div>'
   +'<div class="mb-transition"><div class="mb-tr-line"></div><span class="mb-tr-lbl">Descanso transición</span><input type="text" class="mb-tr-input" id="mb-tr3-'+swid+'" value="5 min"><div class="mb-tr-line"></div></div>'
   +'<div class="mb-section">'
@@ -1018,7 +1070,8 @@ function addSub(swid,sec){
 function delSub(swid,sec,idx){var el=document.getElementById("mbsub-"+swid+"-"+sec+"-"+idx);if(el)el.remove();}
 
 function wireCalc(swid){
-  ["warmup","activacion","preserie","serie"].forEach(function(sec){
+  syncSessionLayout(swid);
+  ["warmup","activacion","estilos","serie"].forEach(function(sec){
     var cont=document.getElementById("mb-subs-"+swid+"-"+sec);if(!cont)return;
     var subs=cont.querySelectorAll(".mb-sub");
     subs.forEach(function(sub,i){wireCalcSub(swid,sec,i);});
@@ -1143,7 +1196,7 @@ function _sumCont(cont,sel,repsId,distId){
 function recalcMeters(){
   document.querySelectorAll('[id^="mb-total-"]').forEach(function(tot){
     var swid=tot.id.slice(9),total=0;
-    ["warmup","activacion","preserie","serie"].forEach(function(sec){
+    sessionSections(layoutValue(swid)).forEach(function(sec){
       var cont=document.getElementById("mb-subs-"+swid+"-"+sec);if(!cont)return;
       var idx=function(sub){return sub.id.split("-").pop();};
       var sum=_sumCont(cont,".mb-sub",function(sub){return "mb-reps-"+swid+"-"+sec+"-"+idx(sub);},function(sub){return "mb-dist-"+swid+"-"+sec+"-"+idx(sub);});
@@ -1155,7 +1208,7 @@ function recalcMeters(){
   });
   var tt=document.getElementById("tpl-total");
   if(tt){var total=0;
-    ["warmup","activacion","preserie","serie"].forEach(function(sec){
+    sessionSections(layoutValue()).forEach(function(sec){
       var cont=document.getElementById("tpl-subs-"+sec);if(!cont)return;
       var idx=function(sub){return sub.id.replace("tpl-sub-"+sec+"-","");};
       var sum=_sumCont(cont,".tpl-sub",function(sub){return "tpl-reps-"+sec+"-"+idx(sub);},function(sub){return "tpl-dist-"+sec+"-"+idx(sub);});
@@ -1191,7 +1244,7 @@ function collectSubs(swid,sec,blockType){
     var noTime=!!(ntEl&&ntEl.checked),targetMs=parseTimeStr(timeStr),restSec=parseDur(restStr),subRestSec=parseDur(subRestStr);
     if(noTime){targetMs=0;pct=0;}
     if(!noTime&&!targetMs&&pct>0){var refMs=getRef(swimmers.find(function(s){return s.id===swid;})||{name:""},dist);if(refMs>0)targetMs=Math.round(refMs/(pct/100));}
-    var parts=[{type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="activacion"?"Activación":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,noTime:noTime,note:desc}];
+    var parts=[{type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="activacion"?"Activación":sec==="estilos"?"Estilos":blockType==="control"?"Test":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:targetMs,noTime:noTime,note:desc}];
     if(subRestSec>0)parts.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:subRestSec,isTransition:true});
     var inc=sub.querySelector(".sequence-include");entries.push({include:!!(inc&&inc.checked),blocks:parts});
   });
@@ -1210,9 +1263,9 @@ function openManualEdit(id){
   if(sesTypeEl&&sw.sessionType)sesTypeEl.value=sw.sessionType;
 
   // 3. Separar bloques por sección y transiciones principales
-  var warmupBlocks=[],activacionBlocks=[],preserieBlocks=[],serieBlocks=[];
+  var warmupBlocks=[],activacionBlocks=[],estilosBlocks=[],serieBlocks=[];
   var mainTransitions=[];
-  var secOrder=[];// warmup | activacion | preserie | serie en orden de aparición
+  var secOrder=[];// warmup | activacion | estilos | serie en orden de aparición
   var lastSec=null;
 
   sw.blocks.forEach(function(b){
@@ -1223,36 +1276,24 @@ function openManualEdit(id){
       // Si no hay bloque previo real del mismo tipo → es transición principal
       mainTransitions.push({sec:lastSec,block:b});
     } else {
-      var sec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="preserie"?"preserie":"serie";
+      var sec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="estilos"?"estilos":"serie";
       if(sec!==lastSec)lastSec=sec;
       if(sec==="warmup")warmupBlocks.push(b);
       else if(sec==="activacion")activacionBlocks.push(b);
-      else if(sec==="preserie")preserieBlocks.push(b);
+      else if(sec==="estilos")estilosBlocks.push(b);
       else serieBlocks.push(b);
     }
   });
 
-  // Reconstruir transiciones principales según la sección que sigue al descanso
-  var tr1Sec=0,tr2Sec=0,tr3Sec=0;
-  var seenAct=sw.blocks.some(function(b){return !b.isTransition&&b.type==="activacion";});
+  [1,2,3].forEach(function(n){var el=document.getElementById("mb-tr"+n+"-"+id);if(el)el.value="";});
   sw.blocks.forEach(function(b,i){
-    if(!b.isTransition)return;
-    var nextReal=null;
-    for(var k=i+1;k<sw.blocks.length;k++){if(!sw.blocks[k].isTransition){nextReal=sw.blocks[k];break;}}
-    if(!nextReal)return;
-    var nSec=nextReal.type==="warmup"?"warmup":nextReal.type==="activacion"?"activacion":nextReal.type==="preserie"?"preserie":"serie";
-    if(nSec==="activacion"){if(!tr1Sec)tr1Sec=b.transitionSec||0;}
-    else if(nSec==="preserie"){if(seenAct){if(!tr2Sec)tr2Sec=b.transitionSec||0;}else{if(!tr1Sec)tr1Sec=b.transitionSec||0;}}
-    else if(nSec==="serie"){if(!tr3Sec)tr3Sec=b.transitionSec||0;}
+    if(!b.isTransition||b.sequenceRound>1)return;
+    var prev=null,next=null;
+    for(var j=i-1;j>=0;j--){if(!sw.blocks[j].isTransition){prev=sw.blocks[j];break;}}
+    for(var k=i+1;k<sw.blocks.length;k++){if(!sw.blocks[k].isTransition){next=sw.blocks[k];break;}}
+    if(prev&&next&&_secOf(prev)!==_secOf(next)){var n=sectionTransitionIndex(_secOf(prev),sw.sessionType);var el=document.getElementById("mb-tr"+n+"-"+id);if(el)el.value=fmtSec(b.transitionSec||0);}
   });
-
-  // 4. Rellenar campos de transición
-  var tr1El=document.getElementById("mb-tr1-"+id);
-  var tr2El=document.getElementById("mb-tr2-"+id);
-  var tr3El=document.getElementById("mb-tr3-"+id);
-  if(tr1El)tr1El.value=tr1Sec>0?fmtSec(tr1Sec):"3 min";
-  if(tr2El)tr2El.value=tr2Sec>0?fmtSec(tr2Sec):"3 min";
-  if(tr3El)tr3El.value=tr3Sec>0?fmtSec(tr3Sec):"5 min";
+  syncSessionLayout(id);
 
   // 5. Función para poblar una sección
   function populateSection(sec,realBlocks,blockType){
@@ -1267,13 +1308,13 @@ function openManualEdit(id){
 
     // Recorrer los bloques originales filtrando la sección
     var inSec=false,subIdx=0;
-    sw.blocks.forEach(function(b){
+    sw.blocks.forEach(function(b,bi){
       if(b.sequenceRound>1)return;
       if(!b.isTransition){
-        var bSec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="preserie"?"preserie":"serie";
+        var bSec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="estilos"?"estilos":"serie";
         if(bSec===sec){inSec=true;subsInSec.push({block:b,subIdx:subIdx});subIdx++;}
         else{inSec=false;}
-      } else if(inSec&&b.transitionSec>0){
+      } else if(inSec&&b.transitionSec>0&&!_isMainTransition(sw.blocks,bi)){
         // sub-descanso dentro de esta sección
         subRestMap[subIdx-1]=b.transitionSec;
       }
@@ -1340,7 +1381,7 @@ function openManualEdit(id){
 
   populateSection("warmup",warmupBlocks,"warmup");
   populateSection("activacion",activacionBlocks,"activacion");
-  populateSection("preserie",preserieBlocks,"preserie");
+  populateSection("estilos",estilosBlocks,"estilos");
   populateSection("serie",serieBlocks,"serie");
 
   // 6. Scroll hacia el panel manual
@@ -1357,29 +1398,7 @@ function loadManual(id){
   var dateEl=document.getElementById("sw-date-"+id);
   if(dateEl&&dateEl.value)sw.sessionDate=dateEl.value;
   saveSessions();
-  var tr1=parseDur(document.getElementById("mb-tr1-"+id)?document.getElementById("mb-tr1-"+id).value:"3 min");
-  var tr2=parseDur(document.getElementById("mb-tr2-"+id)?document.getElementById("mb-tr2-"+id).value:"3 min");
-  var tr3=parseDur(document.getElementById("mb-tr3-"+id)?document.getElementById("mb-tr3-"+id).value:"5 min");
-  var blocks=[];
-  var mW=parseInt((document.getElementById("mb-meters-"+id+"-warmup")||{}).value)||0;
-  var mA=parseInt((document.getElementById("mb-meters-"+id+"-activacion")||{}).value)||0;
-  var mP=parseInt((document.getElementById("mb-meters-"+id+"-preserie")||{}).value)||0;
-  var mS=parseInt((document.getElementById("mb-meters-"+id+"-serie")||{}).value)||0;
-  var wBlocks=collectSubs(id,"warmup","warmup");
-  if(mW>0&&wBlocks.length>0)wBlocks[0].sectionMeters=mW;
-  var aBlocks=collectSubs(id,"activacion","activacion");
-  if(mA>0&&aBlocks.length>0)aBlocks[0].sectionMeters=mA;
-  var pBlocks=collectSubs(id,"preserie","preserie");
-  if(mP>0&&pBlocks.length>0)pBlocks[0].sectionMeters=mP;
-  var sBlocks=collectSubs(id,"serie","velocity");
-  if(mS>0&&sBlocks.length>0)sBlocks[0].sectionMeters=mS;
-  wBlocks.forEach(function(b){blocks.push(b);});
-  if(tr1>0&&wBlocks.length>0&&(aBlocks.length||pBlocks.length||sBlocks.length))blocks.push({type:"transition",name:"Descanso "+fmtSec(tr1),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:tr1,isTransition:true});
-  aBlocks.forEach(function(b){blocks.push(b);});
-  if(tr2>0&&aBlocks.length>0&&(pBlocks.length||sBlocks.length))blocks.push({type:"transition",name:"Descanso "+fmtSec(tr2),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:tr2,isTransition:true});
-  pBlocks.forEach(function(b){blocks.push(b);});
-  if(tr3>0&&pBlocks.length>0&&sBlocks.length>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(tr3),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,transitionSec:tr3,isTransition:true});
-  sBlocks.forEach(function(b){blocks.push(b);});
+  var blocks=assembleSessionSections(sw.sessionType,function(sec,type){return collectSubs(id,sec,type);},function(sec){return parseInt((document.getElementById("mb-meters-"+id+"-"+sec)||{}).value)||0;},function(n){return parseDur((document.getElementById("mb-tr"+n+"-"+id)||{}).value||"");});
   var real=blocks.filter(function(b){return!b.isTransition;});
   if(!real.length){alert("Agregá al menos un sub-bloque.");return;}
   applyBlocks(sw,blocks);renderCards();
@@ -1400,6 +1419,7 @@ function loadJSON(id){
 }
 
 function applyBlocks(sw,blocks){
+  migrateLegacySections(blocks);
   sw.blocks=blocks.map(function(b){
     b.id=uid();b.completedReps=[];
     if(b.noTime){b.targetMs=0;b.intensity=0;}
@@ -1418,7 +1438,7 @@ function saveSessions(){
         blocks:s.blocks.map(function(b){
           return{type:b.type,name:b.name,reps:b.reps,distance:b.distance,distKey:b.distKey,
             intensity:b.intensity,restSec:b.restSec,targetMs:b.targetMs,note:b.note||"",
-            isTransition:b.isTransition||false,transitionSec:b.transitionSec||0};
+            isTransition:b.isTransition||false,transitionSec:b.transitionSec||0,sectionMeters:b.sectionMeters||0,noTime:!!b.noTime,sequenceRound:b.sequenceRound||0,sequenceRepeat:b.sequenceRepeat||0};
         })};
     });
     localStorage.setItem("swim-sessions-draft",JSON.stringify(data));
@@ -1435,7 +1455,7 @@ function loadSavedSessions(){
       var sw=makeSw(d.name);
       sw.sessionType=d.sessionType||"";sw.sessionDate=d.sessionDate||todayKey();
       if(d.blocks&&d.blocks.length){
-        sw.blocks=d.blocks.map(function(b){
+        sw.blocks=migrateLegacySections(d.blocks).map(function(b){
           b.id=uid();b.completedReps=[];
           return b;
         });
@@ -4147,9 +4167,9 @@ function exportSessionXLSX(swimmersData,customDate){
     var sessionType=s.sessionType||(today?today.desc:"Entrenamiento");
     var sessionPhase=today&&today.phase?today.phase:"";
 
-    // Group blocks by section: warmup / preserie / serie
-    function secName(type){return type==="warmup"?"CALENTAMIENTO":type==="activacion"?"ACTIVACIÓN":type==="preserie"?"PRE-SERIE":"SERIE";}
-    function secOrder(type){return type==="warmup"?0:type==="activacion"?1:type==="preserie"?2:3;}
+    // Group blocks by section: warmup / estilos / serie
+    function secName(type){return type==="control"?"TEST":sessionSectionLabel(_secOf({type:type}),s.sessionType).toUpperCase();}
+    function secOrder(type){return sessionSections(s.sessionType).indexOf(_secOf({type:type}));}
     var sections={};
     allBlocks.forEach(function(bl){
       if(!bl.reps||!bl.reps.length)return;
@@ -4283,7 +4303,7 @@ function exportPlanPDF(swid){
     +'.block{margin-bottom:14px;border-left:3px solid #ddd;padding-left:12px;}'
     +'.block.warmup{border-left-color:#888;}'
     +'.block.activacion{border-left-color:#ba7517;}'
-    +'.block.preserie{border-left-color:#6d3ec7;}'
+    +'.block.estilos{border-left-color:#6d3ec7;}'
     +'.block.velocity,.block.rv,.block.serie{border-left-color:#b52020;}'
     +'.block.strength{border-left-color:#1a6fb5;}'
     +'.block.technique{border-left-color:#1a9e4a;}'
@@ -4307,21 +4327,21 @@ function exportPlanPDF(swid){
   +'<div class="phase">'+esc(sessionPhase)+'</div>';
 
   // BLOCKS
-  var sections=["warmup","activacion","preserie","serie"];
-  var sectionNames={warmup:"Calentamiento",activacion:"Activación",preserie:"Pre-serie",serie:"Serie"};
-  var sectionTypes={warmup:["warmup"],activacion:["activacion"],preserie:["preserie"],serie:["velocity","rv","strength","technique","control","taper","transition"]};
+  var sections=["warmup","activacion","estilos","serie"];
+  var sectionNames={warmup:"Calentamiento",activacion:"Activación",estilos:"Estilos",serie:"Serie"};
+  var sectionTypes={warmup:["warmup"],activacion:["activacion"],estilos:["estilos"],serie:["velocity","rv","strength","technique","control","taper","transition"]};
 
   // Group blocks by section
   var warmupBlocks=blocks.filter(function(b){return b.type==="warmup";});
   var activacionBlocks=blocks.filter(function(b){return b.type==="activacion";});
-  var preserieBlocks=blocks.filter(function(b){return b.type==="preserie";});
-  var serieBlocks=blocks.filter(function(b){return b.type!=="warmup"&&b.type!=="activacion"&&b.type!=="preserie";});
+  var estilosBlocks=blocks.filter(function(b){return b.type==="estilos";});
+  var serieBlocks=blocks.filter(function(b){return b.type!=="warmup"&&b.type!=="activacion"&&b.type!=="estilos";});
 
   function renderBlock(b,showMeters){
     var restStr=b.restSec>0?"↻ "+fmtSec(b.restSec)+" desc/rep":"";
     var timeStr=b.noTime?"S/T":(b.targetMs>0?fmtS(b.targetMs):"");
     var metersStr=(showMeters&&b.sectionMeters>0)?b.sectionMeters+"m":"";
-    var descStr=b.note&&b.note.trim()?b.note.trim():(b.name&&b.name!=="Calentamiento"&&b.name!=="Activación"&&b.name!=="Pre-serie"&&b.name!=="Serie"?b.name:"");
+    var descStr=b.note&&b.note.trim()?b.note.trim():(b.name&&b.name!=="Calentamiento"&&b.name!=="Activación"&&b.name!=="Estilos"&&b.name!=="Serie"?b.name:"");
     var h='<div class="series-row">'
       +(descStr?'<div style="font-size:11px;color:#555;margin-bottom:2px;font-style:italic;">'+esc(descStr)+'</div>':'')
       +'<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">'
@@ -4336,15 +4356,15 @@ function exportPlanPDF(swid){
 
   var totalMetros=0;
   // Render sections — title once per section, sub-blocks flow inside with transitions
-  var SECTION_LABELS={warmup:"Calentamiento",activacion:"Activación",preserie:"Pre-serie",velocity:"Serie",rv:"Serie",strength:"Serie",technique:"Serie",control:"Serie",taper:"Serie"};
-  var SECTION_COLORS={warmup:"#888",activacion:"#ba7517",preserie:"#6d3ec7",velocity:"#b52020",rv:"#b52020",strength:"#1a6fb5",technique:"#1a9e4a",control:"#b52020",taper:"#1a9e4a"};
+  var SECTION_LABELS={warmup:"Calentamiento",activacion:"Activación",estilos:"Estilos",velocity:"Serie",rv:"Serie",strength:"Serie",technique:"Serie",control:"Test",taper:"Serie"};
+  var SECTION_COLORS={warmup:"#888",activacion:"#ba7517",estilos:"#6d3ec7",velocity:"#b52020",rv:"#b52020",strength:"#1a6fb5",technique:"#1a9e4a",control:"#b52020",taper:"#1a9e4a"};
   var sw_blocks=sw.blocks;
 
   // Group blocks into sections keeping transitions inline
   var sections=[];
   var curSec=null;
   sw_blocks.forEach(function(b){
-    var secType=b.isTransition?null:(b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="preserie"?"preserie":"serie");
+    var secType=b.isTransition?null:(b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="estilos"?"estilos":"serie");
     if(!b.isTransition&&secType!==( curSec&&curSec.type)){
       curSec={type:secType,blockType:b.type,items:[]};
       sections.push(curSec);
@@ -4353,7 +4373,7 @@ function exportPlanPDF(swid){
   });
 
   sections.forEach(function(sec){
-    var secLabel=SECTION_LABELS[sec.blockType]||"Serie";
+    var secLabel=sessionSectionLabel(sec.type,sw.sessionType);
     var secColor=SECTION_COLORS[sec.blockType]||"#b52020";
     // Find total meters from first non-transition block
     var firstReal=sec.items.find(function(b){return!b.isTransition;});
@@ -4490,7 +4510,7 @@ function showJSONModal(json,filename){
 // ── MÓDULO PLANTILLAS ────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════
 
-var TPL_SUB_COUNTERS = {warmup:0, activacion:0, preserie:0, serie:0};
+var TPL_SUB_COUNTERS = {warmup:0, activacion:0, estilos:0, serie:0};
 var TPL_CURRENT_ID = null; // plantilla que está siendo aplicada
 
 // ── STORAGE ──────────────────────────────────────────────────────
@@ -4527,7 +4547,7 @@ function tplAddSub(sec){
   var idx=TPL_SUB_COUNTERS[sec]++;
   var cont=document.getElementById("tpl-subs-"+sec);
   if(!cont)return;
-  var typeMap={warmup:"warmup",activacion:"activacion",preserie:"preserie",serie:"velocity"};
+  var typeMap={warmup:"warmup",activacion:"activacion",estilos:"estilos",serie:"velocity"};
   var distOptions=MB_DISTS.map(function(d){return'<option value="'+d+'">'+d+'</option>';}).join("");
   var div=document.createElement("div");
   div.className="tpl-sub";
@@ -4554,6 +4574,7 @@ function tplAddSub(sec){
 function tplCollectBlocks(){
   var blocks=[];
   function collectSec(sec, blockType){
+    var sectionBlocks=[];
     var cont=document.getElementById("tpl-subs-"+sec);if(!cont)return;
     _ensureSequenceControls(cont);
     var entries=[];
@@ -4562,46 +4583,14 @@ function tplCollectBlocks(){
       var g=function(fid){var el=document.getElementById("tpl-"+fid+"-"+sec+"-"+id);return el?el.value.trim():"";};
       var desc=g("desc"),reps=parseInt(g("reps"))||1,dist=g("dist")||"25m libre",pct=parseFloat(g("pct"))||0;
       var restSec=parseDur(g("rest")),subRestSec=parseDur(g("subrest"));
-      var parts=[{type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="activacion"?"Activación":sec==="preserie"?"Pre-serie":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:0,note:desc||"",isTransition:false,transitionSec:0,sectionMeters:0}];
+      var parts=[{type:blockType,name:desc||(sec==="warmup"?"Calentamiento":sec==="activacion"?"Activación":sec==="estilos"?"Estilos":blockType==="control"?"Test":"Serie"),reps:reps,distance:dist,distKey:dist,intensity:pct,restSec:restSec,targetMs:0,note:desc||"",isTransition:false,transitionSec:0,sectionMeters:0}];
       if(subRestSec>0)parts.push({type:"transition",name:"Descanso "+fmtSec(subRestSec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:subRestSec,sectionMeters:0});
       var inc=sub.querySelector(".sequence-include");entries.push({include:!!(inc&&inc.checked),blocks:parts});
     });
-    expandSequence(entries,_sequenceTimes(cont)).forEach(function(b){blocks.push(b);});
+    expandSequence(entries,_sequenceTimes(cont)).forEach(function(b){sectionBlocks.push(b);});
+    return sectionBlocks;
   }
-  var mW=parseInt((document.getElementById("tpl-meters-warmup")||{}).value)||0;
-  var mA=parseInt((document.getElementById("tpl-meters-activacion")||{}).value)||0;
-  var mP=parseInt((document.getElementById("tpl-meters-preserie")||{}).value)||0;
-  var mS=parseInt((document.getElementById("tpl-meters-serie")||{}).value)||0;
-  var tr1Sec=parseDur((document.getElementById("tpl-tr1")||{}).value||"");
-  var tr2Sec=parseDur((document.getElementById("tpl-tr2")||{}).value||"");
-  var tr3Sec=parseDur((document.getElementById("tpl-tr3")||{}).value||"");
-
-  var startW=blocks.length;
-  collectSec("warmup","warmup");
-  if(mW>0&&blocks.length>startW)blocks[startW].sectionMeters=mW;
-  var wLen=blocks.length-startW;
-
-  if(tr1Sec>0&&wLen>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(tr1Sec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:tr1Sec,sectionMeters:0});
-
-  var startA=blocks.length;
-  collectSec("activacion","activacion");
-  if(mA>0&&blocks.length>startA)blocks[startA].sectionMeters=mA;
-  var aLen=blocks.length-startA;
-
-  if(tr2Sec>0&&aLen>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(tr2Sec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:tr2Sec,sectionMeters:0});
-
-  var startP=blocks.length;
-  collectSec("preserie","preserie");
-  if(mP>0&&blocks.length>startP)blocks[startP].sectionMeters=mP;
-  var pLen=blocks.length-startP;
-
-  if(tr3Sec>0&&pLen>0)blocks.push({type:"transition",name:"Descanso "+fmtSec(tr3Sec),reps:1,distance:"—",distKey:"",intensity:0,restSec:0,targetMs:0,isTransition:true,transitionSec:tr3Sec,sectionMeters:0});
-
-  var startS=blocks.length;
-  collectSec("serie","velocity");
-  if(mS>0&&blocks.length>startS)blocks[startS].sectionMeters=mS;
-
-  return blocks;
+  return assembleSessionSections(layoutValue(),collectSec,function(sec){return parseInt((document.getElementById("tpl-meters-"+sec)||{}).value)||0;},function(n){return parseDur((document.getElementById("tpl-tr"+n)||{}).value||"");});
 }
 
 // ── GUARDAR PLANTILLA ────────────────────────────────────────────
@@ -4618,12 +4607,13 @@ document.getElementById("btn-tpl-save").addEventListener("click",function(){
     // Overwrite existing
     arr[parseInt(editIdx)].name=name;
     arr[parseInt(editIdx)].blocks=blocks;
+    arr[parseInt(editIdx)].sessionType=layoutValue();
     arr[parseInt(editIdx)].updatedAt=new Date().toISOString();
     saveTemplates(arr);
     renderTemplateList();
     alert("Plantilla \""+name+"\" actualizada.");
   } else {
-    arr.push({id:uid(),name:name,blocks:blocks,createdAt:new Date().toISOString()});
+    arr.push({id:uid(),name:name,blocks:blocks,sessionType:layoutValue(),createdAt:new Date().toISOString()});
     saveTemplates(arr);
     renderTemplateList();
     alert("Plantilla \""+name+"\" guardada.");
@@ -4635,11 +4625,11 @@ document.getElementById("btn-tpl-save").addEventListener("click",function(){
   delete document.getElementById("tpl-builder").dataset.editIdx;
   var saveBtn=document.getElementById("btn-tpl-save");
   if(saveBtn){saveBtn.textContent="💾 Guardar plantilla";saveBtn.style.background="";saveBtn.style.borderColor="";saveBtn.style.color="";}
-  ["warmup","activacion","preserie","serie"].forEach(function(sec){
+  ["warmup","activacion","estilos","serie"].forEach(function(sec){
     var c=document.getElementById("tpl-subs-"+sec);if(c)c.innerHTML="";
     TPL_SUB_COUNTERS[sec]=0;
   });
-  ["tpl-tr1","tpl-tr2","tpl-tr3","tpl-meters-warmup","tpl-meters-activacion","tpl-meters-preserie","tpl-meters-serie"].forEach(function(id){
+  ["tpl-tr1","tpl-tr2","tpl-tr3","tpl-meters-warmup","tpl-meters-activacion","tpl-meters-estilos","tpl-meters-serie"].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value="";
   });
 });
@@ -4648,6 +4638,7 @@ document.getElementById("btn-tpl-save").addEventListener("click",function(){
 function exportTemplateObj(t){
   var data={
     _type:"wottrich-plantilla",
+    sessionType:t.sessionType||"",
     name:t.name,
     exportedAt:new Date().toISOString(),
     blocks:t.blocks
@@ -4663,7 +4654,7 @@ document.getElementById("btn-tpl-export-new").addEventListener("click",function(
   var name=((document.getElementById("tpl-new-name")||{}).value||"").trim()||"plantilla";
   var blocks=tplCollectBlocks();
   if(!blocks.filter(function(b){return!b.isTransition;}).length){alert("Agregá al menos un sub-bloque.");return;}
-  exportTemplateObj({name:name,blocks:blocks});
+  exportTemplateObj({name:name,blocks:blocks,sessionType:layoutValue()});
 });
 
 document.getElementById("btn-tpl-cancel-edit").addEventListener("click",function(){
@@ -4672,11 +4663,11 @@ document.getElementById("btn-tpl-cancel-edit").addEventListener("click",function
   if(saveBtn){saveBtn.textContent="💾 Guardar plantilla";saveBtn.style.background="";saveBtn.style.borderColor="";saveBtn.style.color="";}
   this.style.display="none";
   document.getElementById("tpl-new-name").value="";
-  ["warmup","activacion","preserie","serie"].forEach(function(sec){
+  ["warmup","activacion","estilos","serie"].forEach(function(sec){
     var c=document.getElementById("tpl-subs-"+sec);if(c)c.innerHTML="";
     TPL_SUB_COUNTERS[sec]=0;
   });
-  ["tpl-tr1","tpl-tr2","tpl-tr3","tpl-meters-warmup","tpl-meters-activacion","tpl-meters-preserie","tpl-meters-serie"].forEach(function(id){
+  ["tpl-tr1","tpl-tr2","tpl-tr3","tpl-meters-warmup","tpl-meters-activacion","tpl-meters-estilos","tpl-meters-serie"].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value="";
   });
 });
@@ -4704,7 +4695,7 @@ document.getElementById("tpl-file-import").addEventListener("change",function(){
       }
       if(!blocks||!blocks.length)throw new Error("Sin bloques");
       var arr=getTemplates();
-      arr.push({id:uid(),name:name,blocks:blocks,createdAt:new Date().toISOString()});
+      arr.push({id:uid(),name:name,blocks:migrateLegacySections(blocks),sessionType:data.sessionType||"",createdAt:new Date().toISOString()});
       saveTemplates(arr);
       renderTemplateList();
       alert("Plantilla \""+name+"\" importada.");
@@ -4726,6 +4717,9 @@ function deleteTemplate(idx){
 // ── EDITAR PLANTILLA ──────────────────────────────────────────────
 function editTemplate(idx){
   var arr=getTemplates();var t=arr[parseInt(idx)];if(!t)return;
+  migrateLegacySections(t.blocks);
+  var typeEl=document.getElementById("tpl-sestype");if(typeEl){typeEl.innerHTML=timerTypeOptions(t.sessionType||"");typeEl.value=t.sessionType||"";}
+  syncSessionLayout();
   // Scroll to builder
   var builder=document.getElementById("tpl-builder");
   if(builder){builder.scrollIntoView({behavior:"smooth"});}
@@ -4733,7 +4727,7 @@ function editTemplate(idx){
   var nameInp=document.getElementById("tpl-new-name");
   if(nameInp)nameInp.value=t.name;
   // Clear all sections
-  ["warmup","activacion","preserie","serie"].forEach(function(sec){
+  ["warmup","activacion","estilos","serie"].forEach(function(sec){
     var c=document.getElementById("tpl-subs-"+sec);if(c)c.innerHTML="";
     TPL_SUB_COUNTERS[sec]=0;
   });
@@ -4743,14 +4737,14 @@ function editTemplate(idx){
   // Find inter-section transitions (those not preceded by a real block of the same section)
   var tr1El=document.getElementById("tpl-tr1");var tr2El=document.getElementById("tpl-tr2");var tr3El=document.getElementById("tpl-tr3");
   // Rebuild section structure
-  var sections={warmup:[],activacion:[],preserie:[],serie:[]};
+  var sections={warmup:[],activacion:[],estilos:[],serie:[]};
   var secOrder=[];var pendingTransition=null;
   t.blocks.forEach(function(b){
     if(b.isTransition){
       // Check if it's a between-section transition by looking at context
       pendingTransition=b;
     } else {
-      var sec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="preserie"?"preserie":"serie";
+      var sec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="estilos"?"estilos":"serie";
       sections[sec].push({block:b,subRest:null});
       if(pendingTransition&&sec!=="warmup"){
         // It's a within-section sub-rest — attach to previous sub in same section
@@ -4758,10 +4752,10 @@ function editTemplate(idx){
         if(prevSubs.length>1){prevSubs[prevSubs.length-2].subRest=pendingTransition;}
         else {
           // It's a between-section transition
-          var prevSecKey=sec==="preserie"?"warmup":sec==="serie"?"preserie":null;
+          var prevSecKey=sec==="estilos"?"warmup":sec==="serie"?"estilos":null;
           if(prevSecKey===null&&tr1El)tr1El.value=fmtSec(pendingTransition.transitionSec||0);
           else if(prevSecKey==="warmup"&&tr1El)tr1El.value=fmtSec(pendingTransition.transitionSec||0);
-          else if(prevSecKey==="preserie"&&tr2El)tr2El.value=fmtSec(pendingTransition.transitionSec||0);
+          else if(prevSecKey==="estilos"&&tr2El)tr2El.value=fmtSec(pendingTransition.transitionSec||0);
         }
       }
       pendingTransition=null;
@@ -4770,7 +4764,7 @@ function editTemplate(idx){
   // More robust: scan ordered transitions
   var interTrans=[];var lastRealSec=null;
   t.blocks.forEach(function(b){
-    if(!b.isTransition){lastRealSec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="preserie"?"preserie":"serie";}
+    if(!b.isTransition){lastRealSec=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="estilos"?"estilos":"serie";}
     else if(b.isTransition&&lastRealSec){
       interTrans.push({sec:lastRealSec,transitionSec:b.transitionSec||0});
     }
@@ -4786,18 +4780,18 @@ function editTemplate(idx){
       var nextReal=null;
       for(var k=i+1;k<t.blocks.length;k++){if(!t.blocks[k].isTransition){nextReal=t.blocks[k];break;}}
       if(prevReal&&nextReal){
-        var pSec=prevReal.type==="warmup"?"warmup":prevReal.type==="activacion"?"activacion":prevReal.type==="preserie"?"preserie":"serie";
-        var nSec=nextReal.type==="warmup"?"warmup":nextReal.type==="activacion"?"activacion":nextReal.type==="preserie"?"preserie":"serie";
+        var pSec=prevReal.type==="warmup"?"warmup":prevReal.type==="activacion"?"activacion":prevReal.type==="estilos"?"estilos":"serie";
+        var nSec=nextReal.type==="warmup"?"warmup":nextReal.type==="activacion"?"activacion":nextReal.type==="estilos"?"estilos":"serie";
         if(pSec!==nSec){
-          var trgEl=nSec==="activacion"?tr1El:nSec==="preserie"?(hasAct?tr2El:tr1El):tr3El;
+          var trgEl=document.getElementById("tpl-tr"+sectionTransitionIndex(pSec,layoutValue()));
           if(trgEl&&!trgEl.value)trgEl.value=fmtSec(b.transitionSec||0);
         }
       }
     }
   });
   // Set meters
-  var meterMap={warmup:document.getElementById("tpl-meters-warmup"),activacion:document.getElementById("tpl-meters-activacion"),preserie:document.getElementById("tpl-meters-preserie"),serie:document.getElementById("tpl-meters-serie")};
-  ["warmup","activacion","preserie","serie"].forEach(function(sec){
+  var meterMap={warmup:document.getElementById("tpl-meters-warmup"),activacion:document.getElementById("tpl-meters-activacion"),estilos:document.getElementById("tpl-meters-estilos"),serie:document.getElementById("tpl-meters-serie")};
+  ["warmup","activacion","estilos","serie"].forEach(function(sec){
     var firstReal=t.blocks.find(function(b){return!b.isTransition&&(b.type===(sec==="serie"?"velocity":sec))&&b.sectionMeters>0;});
     if(meterMap[sec]&&firstReal)meterMap[sec].value=firstReal.sectionMeters;
     else if(meterMap[sec])meterMap[sec].value="";
@@ -4844,7 +4838,7 @@ function editTemplate(idx){
       var nextReal=null;
       for(var k=i+1;k<t.blocks.length;k++){if(!t.blocks[k].isTransition){nextReal=t.blocks[k];break;}}
       if(nextReal&&prevBlockSec){
-        var nSec2=nextReal.type==="warmup"?"warmup":nextReal.type==="activacion"?"activacion":nextReal.type==="preserie"?"preserie":"serie";
+        var nSec2=nextReal.type==="warmup"?"warmup":nextReal.type==="activacion"?"activacion":nextReal.type==="estilos"?"estilos":"serie";
         if(nSec2===prevBlockSec){
           // sub-block rest — attach to last sub in that section
           var cont2=document.getElementById("tpl-subs-"+nSec2);
@@ -4860,7 +4854,7 @@ function editTemplate(idx){
         }
       }
     } else {
-      var sec2=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="preserie"?"preserie":"serie";
+      var sec2=b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="estilos"?"estilos":"serie";
       addSubFromBlock(sec2,b);
       prevBlockSec=sec2;
     }
@@ -4878,6 +4872,7 @@ function editTemplate(idx){
 // ── MODAL APLICAR A NADADORES ─────────────────────────────────────
 function openApplyModal(idx){
   var arr=getTemplates();var t=arr[parseInt(idx)];if(!t)return;
+  migrateLegacySections(t.blocks);
   TPL_CURRENT_ID=parseInt(idx);
   document.getElementById("tpl-apply-title").textContent="Aplicar: "+t.name;
 
@@ -4919,7 +4914,7 @@ function openApplyModal(idx){
     var ph='<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Estructura de la plantilla</div>';
     ph+='<table class="tpl-preview-table"><thead><tr><th>Sección</th><th>Bloque</th><th>Reps</th><th>Dist.</th><th>%</th><th>Desc.</th></tr></thead><tbody>';
     real.forEach(function(b){
-      var secLabel=b.type==="warmup"?"Calent.":b.type==="activacion"?"Activ.":b.type==="preserie"?"Pre-serie":"Serie";
+      var secLabel=b.type==="warmup"?"Calent.":b.type==="activacion"?"Activ.":b.type==="estilos"?"Estilos":b.type==="control"?"Test":"Serie";
       ph+='<tr>'
         +'<td class="td-sect">'+secLabel+'</td>'
         +'<td style="color:var(--text);">'+esc(b.name)+'</td>'
@@ -4968,7 +4963,8 @@ document.getElementById("btn-tpl-apply").addEventListener("click",function(){
       }
       return nb;
     });
-    sw.blocks=blocks;
+    if(t.sessionType)sw.sessionType=t.sessionType;
+    sw.blocks=migrateLegacySections(blocks);
     sw.state="idle";sw.curBlock=0;sw.curRep=0;sw.phase="idle";
     sw.doneBlocks=[];sw.savedEvent="";
     applied++;
@@ -5806,8 +5802,8 @@ document.getElementById("pdf-print-btn").addEventListener("click",function(){
 var _editSwId=null;
 
 function editBlockHTML(b,i){
-  var typeColor=b.type==="warmup"?"var(--muted)":b.type==="activacion"?"var(--at)":b.type==="preserie"?"var(--pt)":"var(--rt)";
-  var typeLabel=b.type==="warmup"?"CALENTAMIENTO":b.type==="activacion"?"ACTIVACIÓN":b.type==="preserie"?"PRE-SERIE":"SERIE";
+  var typeColor=b.type==="warmup"?"var(--muted)":b.type==="activacion"?"var(--at)":b.type==="estilos"?"var(--pt)":"var(--rt)";
+  var typeLabel=b.type==="warmup"?"CALENTAMIENTO":b.type==="activacion"?"ACTIVACIÓN":b.type==="estilos"?"ESTILOS":b.type==="control"?"TEST":"SERIE";
   var distOpts=MB_DISTS.map(function(d){return'<option value="'+d+'"'+(d===(b.distance||"")?' selected':'')+'>'+d+'</option>';}).join('');
   return '<div class="edit-block-row" id="edit-brow-'+i+'" data-idx="'+i+'" data-type="'+b.type+'">'
     +'<div class="edit-block-hdr">'
@@ -5891,8 +5887,8 @@ function openEditModal(swid){
   modal.style.display="flex";
 }
 
-function _secOf(b){return b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="preserie"?"preserie":"serie";}
-function _secName(k){return k==="warmup"?"Calentamiento":k==="activacion"?"Activación":k==="preserie"?"Pre-serie":"Serie";}
+function _secOf(b){return b.type==="warmup"?"warmup":b.type==="activacion"?"activacion":b.type==="estilos"?"estilos":"serie";}
+function _secName(k){return k==="warmup"?"Calentamiento":k==="activacion"?"Activación":k==="estilos"?"Estilos":"Serie";}
 
 function renderEditBody(sw){
   var body=document.getElementById("edit-modal-body");if(!body)return;
@@ -5939,7 +5935,7 @@ function renderEditBody(sw){
   });
 }
 
-// A transition is a "section transition" (between warmup/preserie/serie) if the blocks
+// A transition is a "section transition" (between warmup/estilos/serie) if the blocks
 // before and after it have different types. Otherwise it's a sub-block rest.
 function _isMainTransition(blocks,idx){
   var prev=null,next=null;
@@ -7098,6 +7094,20 @@ function closeEditModal(){document.getElementById("edit-session-modal").style.di
       if(m>22) blurNow();
     }, {passive:true});
   }
+})();
+</script>
+<script>
+(function(){
+  var tpl=document.getElementById("tpl-sestype");if(tpl){tpl.innerHTML=timerTypeOptions("");syncSessionLayout();}
+  document.addEventListener("change",function(e){
+    var el=e.target;if(!el||!el.id)return;
+    if(el.id==="tpl-sestype"){syncSessionLayout();return;}
+    if(el.id.indexOf("mb-sestype-")===0){
+      var id=el.id.slice(11),sw=swimmers.find(function(s){return s.id===id;});
+      if(sw){sw.sessionType=el.value;var card=document.getElementById("sw-sestype-"+id);if(card)card.value=el.value;saveSessions();}
+      syncSessionLayout(id);
+    }
+  });
 })();
 </script>
 </body>
