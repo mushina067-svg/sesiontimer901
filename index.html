@@ -802,7 +802,7 @@ function getRef(name,dist){var p=getProfile(name);if(!p||!p.refs)return 0;var ke
 var swimmers=[];
 var raf=null;
 var selId=null;
-function makeSw(name){return{id:uid(),name:name,blocks:[],state:"noplan",curBlock:0,curRep:0,phase:"idle",repStart:0,restStart:0,repElapsed:0,restElapsed:0,curSplits:[],doneBlocks:[],savedEvent:"",sessionDate:todayKey()};}
+function makeSw(name){return{id:uid(),name:name,blocks:[],state:"noplan",curBlock:0,curRep:0,phase:"idle",repStart:0,restStart:0,repElapsed:0,restElapsed:0,curSplits:[],doneBlocks:[],savedEvent:"",sessionDate:todayKey(),pool:25};}
 
 // ── NADADORES TAB ─────────────────────────────────────────────────
 document.getElementById("btn-add-sw").addEventListener("click",addSwimmer);
@@ -839,7 +839,7 @@ function renderCards(){
         +'<button class="btn-rem" data-id="'+s.id+'">×</button>'
       +'</div>'
       +'<div class="sw-card-body">'
-        +'<div class="sc-today" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+'<span style="white-space:nowrap;font-size:11px;color:var(--muted);">Sesión:</span>'+'<select id="sw-sestype-'+s.id+'" data-swid="'+s.id+'" class="sw-sestype-sel" style="flex:1;padding:5px 8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--gt);font-size:12px;font-family:inherit;appearance:none;-webkit-appearance:none;">'+timerTypeOptions(s.sessionType||'')+'</select>'+'</div>'
+        +'<div class="sc-today" style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">'+'<span style="white-space:nowrap;font-size:11px;color:var(--muted);">Sesión:</span>'+'<select id="sw-sestype-'+s.id+'" data-swid="'+s.id+'" class="sw-sestype-sel" style="flex:1;padding:5px 8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--gt);font-size:12px;font-family:inherit;appearance:none;-webkit-appearance:none;">'+timerTypeOptions(s.sessionType||'')+'</select>'+'<select data-swid="'+s.id+'" class="sw-pool-sel" title="Piscina" style="flex:0 0 auto;padding:5px 8px;border-radius:var(--rs);border:.5px solid var(--b2);background:var(--surf2);color:var(--gt);font-size:12px;font-family:inherit;"><option value="25"'+(poolOf(s)===25?' selected':'')+'>Piscina 25 m</option><option value="50"'+(poolOf(s)===50?' selected':'')+'>Piscina 50 m</option></select>'+'</div>'
         +(hasSess?'<div class="session-ok" style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">'+
           '<span>✓ Sesión cargada — '+s.blocks.filter(function(b){return!b.isTransition;}).length+' bloques</span>'+
           '<div style="display:flex;gap:5px;">'+
@@ -905,6 +905,12 @@ function renderCards(){
     sel.addEventListener("change",function(){
       var sw=swimmers.find(function(s){return s.id===sel.dataset.swid;});
       if(sw){sw.sessionType=sel.value;var m=document.getElementById("mb-sestype-"+sw.id);if(m)m.value=sel.value;syncSessionLayout(sw.id);saveSessions();}
+    });
+  });
+  cont.querySelectorAll(".sw-pool-sel").forEach(function(sel){
+    sel.addEventListener("change",function(){
+      var sw=swimmers.find(function(s){return s.id===sel.dataset.swid;});
+      if(sw){sw.pool=parseInt(sel.value)===50?50:25;saveSessions();}
     });
   });
   cont.querySelectorAll("[data-action]").forEach(function(b){
@@ -1434,7 +1440,7 @@ function applyBlocks(sw,blocks){
 function saveSessions(){
   try{
     var data=swimmers.map(function(s){
-      return{id:s.id,name:s.name,sessionType:s.sessionType||"",sessionDate:s.sessionDate||"",
+      return{id:s.id,name:s.name,sessionType:s.sessionType||"",sessionDate:s.sessionDate||"",pool:poolOf(s),
         blocks:s.blocks.map(function(b){
           return{type:b.type,name:b.name,reps:b.reps,distance:b.distance,distKey:b.distKey,
             intensity:b.intensity,restSec:b.restSec,targetMs:b.targetMs,note:b.note||"",
@@ -1453,7 +1459,7 @@ function loadSavedSessions(){
     if(!data||!data.length)return;
     swimmers=data.map(function(d){
       var sw=makeSw(d.name);
-      sw.sessionType=d.sessionType||"";sw.sessionDate=d.sessionDate||todayKey();
+      sw.sessionType=d.sessionType||"";sw.sessionDate=d.sessionDate||todayKey();sw.pool=d.pool===50?50:25;
       if(d.blocks&&d.blocks.length){
         sw.blocks=migrateLegacySections(d.blocks).map(function(b){
           b.id=uid();b.completedReps=[];
@@ -2227,7 +2233,8 @@ function finishSw(s){
       id:Date.now(),
       date:new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),
       sessionType:s.sessionType||(today?today.desc:"Entrenamiento"),
-      swimmers:[{name:s.name,blocks:s.doneBlocks.slice()}]
+      pool:poolOf(s),
+      swimmers:[{name:s.name,pool:poolOf(s),blocks:s.doneBlocks.slice()}]
     });
     saveHist(h);
     updateHistTab(h.length);
@@ -2654,14 +2661,14 @@ document.getElementById("btn-sav").addEventListener("click",function(){
   var s=swimmers.find(function(x){return x.id===selId;});if(!s)return;
   var ev=document.getElementById("exp-event");if(ev)s.savedEvent=ev.value;
   var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length&&!all.some(function(d){return d.bid&&d.bid===b.id;}))all.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});
-  var h=getHist();h.unshift({id:Date.now(),date:new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),swimmers:[{name:s.name,event:s.savedEvent||"",blocks:all}]});
+  var h=getHist();h.unshift({id:Date.now(),date:new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),pool:poolOf(s),sessionType:s.sessionType||"",swimmers:[{name:s.name,pool:poolOf(s),event:s.savedEvent||"",blocks:all}]});
   saveHist(h);updateHistTab(h.length);document.getElementById("saved-ok").style.display="block";document.getElementById("btn-sav").disabled=true;
 });
 document.getElementById("btn-saveall").addEventListener("click",function(){
   var active=swimmers.filter(function(s){return s.state==="stopped";});if(!active.length)return;
   var h=getHist();
-  var swData=active.map(function(s){var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length&&!all.some(function(d){return d.bid&&d.bid===b.id;}))all.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});return{name:s.name,event:s.savedEvent||"",blocks:all};});
-  h.unshift({id:Date.now(),date:new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),swimmers:swData});
+  var swData=active.map(function(s){var all=s.doneBlocks.slice();var b=curBlock(s);if(b&&b.completedReps&&b.completedReps.length&&!all.some(function(d){return d.bid&&d.bid===b.id;}))all.push({bid:b.id,name:b.name,type:b.type,distance:b.distance,intensity:b.intensity,targetMs:b.targetMs,reps:b.completedReps.slice()});return{name:s.name,pool:poolOf(s),event:s.savedEvent||"",blocks:all};});
+  [25,50].forEach(function(pl,k){var grp=swData.filter(function(x){return x.pool===pl;});if(grp.length)h.unshift({id:Date.now()+k,date:new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}),pool:pl,swimmers:grp});});
   saveHist(h);updateHistTab(h.length);
   document.getElementById("saveall-bar").innerHTML='<span style="font-size:12px;color:var(--gt);padding:4px 0">Guardado: '+active.map(function(s){return s.name;}).join(", ")+'</span>';
 });
@@ -2887,6 +2894,9 @@ function importProfiles(file){
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────
+function poolOf(x){return x&&(x.pool===50||x.pool==="50")?50:25;}
+var _histPool=25;
+function _histView(h){return(h||[]).filter(function(x){return poolOf(x)===_histPool;});}
 function getHist(){try{return JSON.parse(localStorage.getItem("swim-v6")||"[]");}catch(e){return[];}}
 function getHistDel(){try{var a=JSON.parse(localStorage.getItem("wt-hist-del")||"[]");return Array.isArray(a)?a.map(String):[];}catch(e){return[];}}
 function saveHist(h){try{
@@ -2900,13 +2910,21 @@ function updateHistTab(n){document.getElementById("tab-history").textContent="Hi
 var _histMode="calendar"; // "list" | "calendar"
 
 function renderHistory(){
-  var h=getHist();updateHistTab(h.length);var el=document.getElementById("hist-list");
+  var hAll=getHist();updateHistTab(hAll.length);var el=document.getElementById("hist-list");
+  var h=_histView(hAll);
+  var _pb=function(v){var on=_histPool===v;return'<button class="hist-pool-btn" data-pool="'+v+'" style="padding:5px 12px;border-radius:var(--rs);font-size:12px;cursor:pointer;font-family:inherit;font-weight:700;border:.5px solid '+(on?"var(--bb)":"var(--b2)")+';background:'+(on?"var(--bd)":"var(--surf2)")+';color:'+(on?"var(--bt)":"var(--muted)")+';">Piscina '+v+' m</button>';};
+  var poolBar='<div style="display:flex;gap:6px;margin-bottom:10px;">'+_pb(25)+_pb(50)+'</div>';
   if(!h.length){
+    el.innerHTML=poolBar+'<div style="text-align:center;color:var(--faint);font-size:14px;padding:3rem 0">No hay sesiones guardadas en piscina de '+_histPool+' m.</div>';
+    el.querySelectorAll(".hist-pool-btn").forEach(function(b){b.addEventListener("click",function(){_histPool=parseInt(b.dataset.pool);renderHistory();});});
+    return;
+  }
+  if(false){
     el.innerHTML='<div style="text-align:center;color:var(--faint);font-size:14px;padding:4rem 0">No hay sesiones guardadas.<br><br><span style="font-size:12px">Se guardan automáticamente al tocar "Terminar sesión".</span></div>';
     return;
   }
   // Mode toggle bar
-  var html='<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">'
+  var html=poolBar+'<div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">'
     +'<span class="hist-count">'+h.length+' sesión'+(h.length!==1?"es":"")+'</span>'
     +'<div style="margin-left:auto;display:flex;gap:4px;">'
       +'<button id="hist-btn-calendar" style="padding:5px 12px;border-radius:var(--rs);font-size:12px;cursor:pointer;font-family:inherit;border:.5px solid '+(_histMode==="calendar"?"var(--gb)":"var(--b2)")+';background:'+(_histMode==="calendar"?"var(--gd)":"var(--surf2)")+';color:'+(_histMode==="calendar"?"var(--gt)":"var(--muted)")+';">📅 Cronograma</button>'
@@ -2925,6 +2943,7 @@ function renderHistory(){
 
   el.innerHTML=html;
 
+  el.querySelectorAll(".hist-pool-btn").forEach(function(b){b.addEventListener("click",function(){_histPool=parseInt(b.dataset.pool);renderHistory();});});
   document.getElementById("hist-btn-calendar").addEventListener("click",function(){_histMode="calendar";renderHistory();});
   document.getElementById("hist-btn-list").addEventListener("click",function(){_histMode="list";renderHistory();});
   var _hbp=document.getElementById("hist-btn-progress");if(_hbp)_hbp.addEventListener("click",function(){_histMode="progress";renderHistory();});
@@ -2940,10 +2959,10 @@ function renderHistory(){
   el.querySelectorAll("[data-action='xlsx']").forEach(function(btn){
     btn.addEventListener("click",function(){
       var idx=parseInt(this.dataset.idx);
-      var session=getHist()[idx];
+      var session=_histView(getHist())[idx];
       if(!session)return;
       var swData=session.swimmers.map(function(sw){
-        return{name:sw.name,sessionType:session.sessionType||"",doneBlocks:sw.blocks||[],blocks:[],curBlock:0};
+        return{name:sw.name,sessionType:(session.sessionType||"")+" · Piscina "+poolOf(session)+" m",doneBlocks:sw.blocks||[],blocks:[],curBlock:0};
       });
       exportSessionXLSX(swData,session.date);
     });
@@ -2951,12 +2970,12 @@ function renderHistory(){
   el.querySelectorAll("[data-action='pdf']").forEach(function(btn){
     btn.addEventListener("click",function(){
       var idx=parseInt(this.dataset.idx);
-      var session=getHist()[idx];
+      var session=_histView(getHist())[idx];
       if(!session||!session.swimmers||!session.swimmers.length){alert("Esta sesión no tiene datos.");return;}
       var swData=session.swimmers.filter(function(sw){
         return sw.blocks&&sw.blocks.some(function(bl){return bl.reps&&bl.reps.length;});
       }).map(function(sw){
-        return{name:sw.name,sessionType:session.sessionType||"",doneBlocks:sw.blocks||[],blocks:[],curBlock:0};
+        return{name:sw.name,sessionType:(session.sessionType||"")+" · Piscina "+poolOf(session)+" m",doneBlocks:sw.blocks||[],blocks:[],curBlock:0};
       });
       if(!swData.length){alert("Esta sesión no tiene repeticiones registradas.");return;}
       openPDFModal(swData,session.date);
@@ -3291,7 +3310,7 @@ function _pgRepBars(reps,target,P,W){
 }
 
 // ── controles ─────────────────────────────────────────────────────
-function _pgSetSw(i){var d=PG.period==="all"?0:parseInt(PG.period);var b=_pgBuild(getHist(),d);PG.sw=b.order[i]||null;renderHistory();}
+function _pgSetSw(i){var d=PG.period==="all"?0:parseInt(PG.period);var b=_pgBuild(_histView(getHist()),d);PG.sw=b.order[i]||null;renderHistory();}
 function _pgSetPeriod(d){PG.period=d;renderHistory();}
 function _pgSetView(v){PG.view=v;renderHistory();}
 function _pgSetSort(s){PG.sort=(PG.sort===s)?("-"+s):s;renderHistory();}
@@ -3579,7 +3598,7 @@ function _pgViewSwimmers(B){
 // ── reporte imprimible ────────────────────────────────────────────
 function _pgReport(){
   var days=PG.period==="all"?0:parseInt(PG.period);
-  var B=_pgBuild(getHist(),days);
+  var B=_pgBuild(_histView(getHist()),days);
   if(!B.order.length){alert("No hay datos para generar el reporte.");return;}
   var name=PG.sw&&B.map[PG.sw]?PG.sw:B.order[0];
   var S=B.map[name];
@@ -3588,7 +3607,7 @@ function _pgReport(){
   var withData=keys.filter(function(k){return ST[k].n>=2;}).sort(function(a,b){return ST[b].n-ST[a].n||a.localeCompare(b);});
   var single=keys.filter(function(k){return ST[k].n<2;});
   var P=PG_LIGHT;
-  var periodTxt=PG.period==="all"?"Historial completo":"Últimos "+PG.period+" días";
+  var periodTxt=(PG.period==="all"?"Historial completo":"Últimos "+PG.period+" días")+" · Piscina "+_histPool+" m";
   var today=new Date().toLocaleDateString("es-PE",{day:"2-digit",month:"long",year:"numeric"});
 
   var d='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Reporte de progresión — '+esc(name)+'</title><style>'
@@ -3615,7 +3634,7 @@ function _pgReport(){
     +'@media print{body{padding:0}.card{border-color:#ccc}.noprint{display:none}}'
     +'</style></head><body>';
   d+='<div class="noprint" style="text-align:right;margin-bottom:10px"><button onclick="window.print()" style="padding:8px 16px;font-size:12px;border-radius:6px;border:1px solid #1a9e4a;background:#1a9e4a;color:#fff;cursor:pointer">Imprimir / Guardar PDF</button></div>';
-  d+='<h1>Reporte de progresión — '+esc(name)+'</h1>';
+  d+='<h1>Reporte de progresión — '+esc(name)+' · Piscina '+_histPool+' m</h1>';
   d+='<div class="sub">'+periodTxt+' · '+S.nSess+' sesiones · generado el '+today+' · Wottrich Timer</div>';
 
   var improved=0,worsened=0;
