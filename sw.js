@@ -1,26 +1,53 @@
-/* W·Timer service worker — cache del app shell + libreria de Excel */
-const CACHE = 'wtimer-v48';
+/* Wottrich (iPad) — service worker: guarda todo el paquete para usarlo sin internet */
+const CACHE = 'wottrich-ipad-v9';
+
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './icon-192.png',
-  './icon-512.png',
-  './apple-touch-icon.png'
-];
-const EXTERNAL = [
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js'
+  './logo.png',
+  './favicon.ico',
+  './icons/apple-touch-icon.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './apps/shell.js',
+
+  './apps/cronometro/',
+  './apps/cronometro/index.html',
+  './apps/cronometro/xlsx.full.min.js',
+  './apps/cronometro/supabase.js',
+  './apps/cronometro/manifest.webmanifest',
+  './apps/cronometro/icon-192.png',
+  './apps/cronometro/icon-512.png',
+  './apps/cronometro/apple-touch-icon.png',
+  './apps/cronometro/icons/apple-touch-icon.png',
+  './apps/cronometro/icons/icon-192.png',
+  './apps/cronometro/icons/icon-512.png',
+
+  './apps/gym/',
+  './apps/gym/index.html',
+
+  './apps/pizarra/',
+  './apps/pizarra/index.html',
+
+  './apps/analisis/',
+  './apps/analisis/index.html',
+
+  './apps/nutricion/',
+  './apps/nutricion/index.html',
+
+  './apps/crono/',
+  './apps/crono/index.html',
+  './apps/crono/xlsx.full.min.js',
+  './apps/crono/audio-beep.wav',
+  './apps/crono/audio-voice.wav'
 ];
 
 self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     await Promise.allSettled(SHELL.map((u) => c.add(u)));
-    // La libreria de Excel es de otro origen: se guarda como respuesta opaca.
-    await Promise.allSettled(EXTERNAL.map(async (u) => {
-      try { c.put(u, await fetch(u, { mode: 'no-cors' })); } catch (err) {}
-    }));
     self.skipWaiting();
   })());
 });
@@ -37,50 +64,42 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
 
-  // Llamadas a Supabase: siempre a la red, nunca cache.
-  if (/\.supabase\.(co|in)$/.test(new URL(req.url).hostname)) return;
+  const url = new URL(req.url);
 
-  // Libreria de Excel: cache primero, para que el export funcione sin internet.
-  if (EXTERNAL.includes(req.url)) {
-    e.respondWith((async () => {
-      const hit = await caches.match(req);
-      if (hit) return hit;
-      const res = await fetch(req);
-      const c = await caches.open(CACHE);
-      c.put(req, res.clone());
-      return res;
-    })());
-    return;
-  }
+  // La nube (Supabase) y cualquier otro dominio: siempre a la red.
+  if (url.origin !== self.location.origin) return;
 
-  // Navegacion: red primero, cache como respaldo offline.
+  // Navegacion: red primero (para ver cambios al publicar), cache si no hay internet.
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
         const res = await fetch(req);
         const c = await caches.open(CACHE);
-        c.put('./index.html', res.clone());
+        c.put(req.url, res.clone());
         return res;
       } catch (err) {
-        return (await caches.match('./index.html')) || (await caches.match('./')) || Response.error();
+        const hit = await caches.match(req.url);
+        if (hit) return hit;
+        const home = await caches.match('./index.html');
+        return home || Response.error();
       }
     })());
     return;
   }
 
-  // Recursos propios: cache primero.
-  if (new URL(req.url).origin === self.location.origin) {
-    e.respondWith((async () => {
-      const hit = await caches.match(req);
-      if (hit) return hit;
-      try {
-        const res = await fetch(req);
+  // Archivos del propio sitio: cache primero, red como respaldo.
+  e.respondWith((async () => {
+    const hit = await caches.match(req);
+    if (hit) return hit;
+    try {
+      const res = await fetch(req);
+      if (res && res.ok) {
         const c = await caches.open(CACHE);
         c.put(req, res.clone());
-        return res;
-      } catch (err) {
-        return Response.error();
       }
-    })());
-  }
+      return res;
+    } catch (err) {
+      return Response.error();
+    }
+  })());
 });
